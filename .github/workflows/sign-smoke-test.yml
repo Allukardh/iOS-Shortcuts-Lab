@@ -1,4 +1,4 @@
-name: Shortcut signing smoke test
+name: Shortcut donor extraction (iOS 17)
 
 on:
   workflow_dispatch:
@@ -12,40 +12,29 @@ permissions:
   contents: read
 
 jobs:
-  roundtrip:
+  extract:
     runs-on: macos-15
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify macOS command-line tools
+      - name: Extract signed AEA1 originals (no iCloud login required)
         shell: bash
         run: |
           set -euo pipefail
-          sw_vers
-          for program in aea aa shortcuts plutil openssl python3; do
-            command -v "$program"
-          done
-
-      - name: Extract and re-sign originals
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p build
+          mkdir -p build/extracted
           for input in donors/*.shortcut; do
             name="$(basename "$input" .shortcut)"
             workdir="$(mktemp -d)"
             python3 scripts/extract_signed.py "$input" "$workdir"
-            test -s "$workdir/Shortcut.wflow"
-            shortcuts sign --mode anyone --input "$workdir/Shortcut.wflow" --output "build/$name.resigned.shortcut"
-            python3 -c 'import sys; assert open(sys.argv[1],"rb").read(4) == b"AEA1"' "build/$name.resigned.shortcut"
+            cp "$workdir/Shortcut.wflow" "build/extracted/$name.wflow"
+            python3 -c 'import plistlib,sys; p=plistlib.load(open(sys.argv[1],"rb")); plistlib.dump(p,open(sys.argv[2],"wb"),fmt=plistlib.FMT_XML,sort_keys=False)' "$workdir/Shortcut.wflow" "build/extracted/$name.plist"
             rm -rf "$workdir"
           done
 
-      - name: Upload signed shortcuts
-        if: success()
+      - name: Upload editable donors
         uses: actions/upload-artifact@v4
         with:
-          name: signed-roundtrip
-          path: build/*.resigned.shortcut
+          name: extracted-workflows
+          path: build/extracted/
           if-no-files-found: error
