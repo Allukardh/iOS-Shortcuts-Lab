@@ -40,6 +40,8 @@ def main():
         payload = gzip.decompress(body)
     except (EOFError, OSError):
         print("Server returned non-gzip payload.")
+        if len(body)<512 and body.decode("utf-8",errors="replace").isprintable():
+            print("Remote Sign message:",body.decode("utf-8",errors="replace"))
         return 4
     if not payload.startswith(b"AEA1"):
         print("Decompressed response is not AEA1 signed shortcut.")
