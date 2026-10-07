@@ -112,7 +112,7 @@ def speed_build(original: dict) -> dict:
     validate(original, out, 21)
     actual = [a.get("WFWorkflowActionParameters", {}).get("WFMenuItemTitle")
               for a in rebuilt if a["WFWorkflowActionIdentifier"] == "is.workflow.actions.choosefrommenu"
-              and a.get("WFWorkflowActionParameters", {}).get("WFControlFlowMode") == 1]
+              and str(a.get("WFWorkflowActionParameters", {}).get("WFControlFlowMode")) == "1"]
     assert actual == labels, actual
     return out
 
