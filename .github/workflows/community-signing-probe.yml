@@ -1,0 +1,35 @@
+name: One-time community signing verification
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/community-signing-probe.yml"
+      - "scripts/probe_community_hubsign.py"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract one real iOS 17.3.1 donor
+        run: |
+          mkdir -p build/extracted
+          python3 scripts/extract_signed.py donors/Voice-to-Status.original.shortcut build/extracted/voice
+      - name: Make exactly one public Cherri-compatible HubSign signing request
+        run: |
+          python3 scripts/probe_community_hubsign.py --workflow build/extracted/voice/Shortcut.wflow --output build/probe.signed.shortcut
+      - name: Verify signed AEA1 contents
+        run: |
+          python3 scripts/extract_signed.py build/probe.signed.shortcut build/verified
+          test -s build/verified/Shortcut.wflow
+      - name: Keep proof-of-concept result
+        uses: actions/upload-artifact@v4
+        with:
+          name: community-hubsign-probe
+          path: build/probe.signed.shortcut
+          if-no-files-found: error
