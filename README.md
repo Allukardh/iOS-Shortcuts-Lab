@@ -1,46 +1,36 @@
 # iOS Shortcuts Lab
 
-Apple Shortcuts built from **real iOS 17.3.1 exports**, not guessed action schemas.
+An open, reproducible Apple Shortcuts gallery targeting **iOS 17.3.1**.
 
-## Shortcuts (v2 work in progress)
+## Shortcuts
 
-| Shortcut | What it does |
-| --- | --- |
-| **🎙️ Voice → Status** | Takes shared audio, creates a 720 × 1280 portrait video with a cyan animated waveform and AAC audio, saves it to Photos and cleans temporary files. |
-| **⚡ Speed Video** | Speeds a shared H.264/HEVC video to exactly **1.1× / 1.2× / 1.3× / 1.4× / 1.5×**, retaining the original video bitstream and re-timing its audio. |
+| Name | Purpose |
+| ---- | ------- |
+| 🎙️ **Voice → Status** | Convert shared audio to an optimized vertical MP4 with an animated waveform, AAC audio, automatic cleanup and a-Shell mini callback. |
+| ⚡ **Speed Video** | Speed up H.264/HEVC clips at **1.1× / 1.2× / 1.3× / 1.4× / 1.5×** with packet timestamp adjustment and audio tempo correction. |
 
-The donor actions use **a-Shell mini** on iOS. The stock `ffmpeg` executable inside a-Shell mini must support VideoToolbox, `showwaves`, `setts`, and AAC.
+Both are generated using action types harvested from the author's existing **iOS 17.3.1** exports. No speculative new iOS 18+ Shortcut actions are used. They use `a-Shell mini` and its bundled FFmpeg.
 
-## Proven pipeline
+## Automatic reproducible build and signing
 
-1. `donors/`: original, Apple-signed `AEA1` .shortcut exports from iOS 17.3.1.
-2. `scripts/extract_signed.py`: on macOS, unpack AEA1 → Apple Archive → `Shortcut.wflow` using the donor’s embedded signing certificate public key. **No Apple ID credentials needed to extract.**
-3. `scripts/build_shortcuts.py`: edit the underlying workflow using only original iOS 17.3.1 action IDs; preserve silent a-Shell callback pattern. Emit editable XML `.plist` and unsigned `.wflow` files.
-4. GitHub Actions builds and uploads source workflows as artifacts.
+**Donors → extract AEA1 → modify bplist → Shortcuty signing API → verify AEA1 → GitHub Actions artifact**.
 
-### Signing — HubSign optional CI integration
+Our build workflow uses an Apple-hosted compatible macOS runner to *extract* the donor originals; it calls [Shortcuty's **public official signing API**](https://github.com/Shortcuty/Signing-Server-API-Documentation) to sign the newly generated shortcuts. The API is documented as requiring **no API key** and no RoutineHub subscription:
 
-The first real [macOS runner signing attempt](../../actions) successfully extracted the 15-action Speed Video donor, then **Apple’s** `shortcuts sign --mode anyone` failed with **“In order to do this, you must be signed into iCloud.”**
+`POST https://sign.shortcuty.app/api/v1/sign`, `multipart/form-data` with a field named `file`.
 
-A hosted macOS Actions runner is ephemeral and not logged into the owner’s Apple ID. **Do not put Apple ID passwords, two-factor codes, or session cookies into GitHub Actions secrets or into this repository.**
+The signed output is checked by Apple's `aea` unpacking utility, and the resulting workflow actions are compared with the exact ones we submitted, including the minimum client version. **This confirms content integrity, not on-device feature/codec compatibility**.
 
-The build now includes an optional **official RoutineHub HubSign** signing step. To activate it, obtain an eligible RoutineHub membership and a dedicated **HubSign** API key. Add this key **only** to GitHub → Repository Settings → Secrets and variables → Actions → New repository secret with name `HUBSIGN_API_KEY`. Never share passwords or tokens in source code or chat. The next `workflow_dispatch` build will use the key privately to sign both shortcuts. The API returns an AEA1 signed file; CI also tries to extract it before publishing the artifacts.
+To get the latest files, open [GitHub Actions](../../actions/workflows/sign-smoke-test.yml), choose the successful `Build and sign iOS 17 Shortcuts (Shortcuty)` run, and download the signed ZIP artifact. Extract it, move the two `.shortcut` files to the iPhone, open them in Apple Shortcuts, and test on **iOS 17.3.1**.
 
-Alternative: sign on a trusted persistent Mac with iCloud configured.
+## Important boundaries
 
-When no HubSign secret is configured, the CI produces **editable developer workflows only**. After signing succeeds, the build additionally publishes signed `.shortcut` files. **On-device iOS 17.3.1 import/run tests are still required**.
+- The source donor exports are signed and are kept unchanged for reference.
+- Never publish Apple account credentials, keychain dumps, application passwords, tokens, or private shortcuts.
+- A public signing provider can read a submitted shortcut. Audit any workflow before sending it to a third party.
+- The current signing API is public but its uptime and rate limits are controlled by Shortcuty.
+- Final iOS 17.3.1 import and a-Shell mini execution tests must be done on the user's physical phone.
 
-## Testing
-Locally verified FFmpeg `showwaves` output with H.264/AAC video and `setts` / `atempo` speed changes for **both H.264 and HEVC**. iPhone / a-Shell mini execution still requires final testing after signing.
+## Previous findings
 
-## Safety
-Before sharing a new Shortcut publicly, review the workflow for tokens, secrets, personally identifiable paths or sensitive data.
-
-
-### Free signing availability check (2026-10-06)
-
-The documented **RoutineHub API** `POST /api/v1/sign-shortcut` requires a dedicated HubSign key and a membership with access, except for approved partners. An ad-supported consumer-facing website flow, even if available, does not establish unattended API access.
-
-A single compatibility probe of the public `https://hubsign.routinehub.services/sign` endpoint used by the open-source Cherri compiler was made on macOS GitHub Actions (run 37563371931). It returned **HTTP 200, Content-Type: text/html, 261422 bytes**, **not an AEA1-signed shortcut**. The precise cause of the HTML response was not determined; we cannot currently rely on this for unattended, credential-free signing. Do not interpret the HTTP 200 as a successful signature.
-
-No account signup or paid membership has been requested. Builds without a HubSign API key remain unsigned developer artifacts.
+RoutineHub's **membership-only HubSign API** requires a dedicated key and plan. An older public HubSign endpoint no longer produced usable signed files in our October 2026 test. Gluebyte's older `shortcuts.gluebyte.workers.dev` signing endpoint explicitly says it is offline and points to an updated Shortcut Source Helper (version 3.0, released 2026-09-15) that uses Shortcuty.

@@ -1,4 +1,4 @@
-name: Build and optionally sign Shortcuts
+name: Build and sign iOS 17 Shortcuts (Shortcuty)
 
 on:
   workflow_dispatch:
@@ -6,7 +6,9 @@ on:
     branches: [main]
     paths:
       - "donors/**"
-      - "scripts/**"
+      - "scripts/build_shortcuts.py"
+      - "scripts/extract_signed.py"
+      - "scripts/sign_shortcuty.py"
       - ".github/workflows/sign-smoke-test.yml"
 
 permissions:
@@ -15,7 +17,7 @@ permissions:
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -32,48 +34,50 @@ jobs:
             rm -rf "$workdir"
           done
 
-      - name: Build and validate iOS 17.3.1 workflows
+      - name: Build iOS 17.3.1 variants
         run: python3 scripts/build_shortcuts.py --in-dir build/extracted --out-dir build/unsigned
 
-      - name: Upload editable source workflows
-        uses: actions/upload-artifact@v4
-        with:
-          name: editable-v2-workflows
-          path: build/unsigned/
-          if-no-files-found: error
-
-      - name: Check HubSign credential availability
-        id: signer
-        shell: bash
-        env:
-          HUBSIGN_API_KEY: ${{ secrets.HUBSIGN_API_KEY }}
+      - name: Sign Voice → Status through official Shortcuty API
         run: |
-          if [[ -n "$HUBSIGN_API_KEY" ]]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "HubSign secret not configured; upload only developer workflows."
-          fi
+          python3 scripts/sign_shortcuty.py \
+            --input build/unsigned/Voice-to-Status.wflow \
+            --upload-filename '🎙️ Voice → Status.shortcut' \
+            --output 'build/signed/🎙️ Voice → Status.shortcut'
 
-      - name: Sign through official RoutineHub HubSign API
-        if: steps.signer.outputs.enabled == 'true'
+      - name: Sign Speed Video through official Shortcuty API
+        run: |
+          python3 scripts/sign_shortcuty.py \
+            --input build/unsigned/Speed-Video.wflow \
+            --upload-filename '⚡ Speed Video.shortcut' \
+            --output 'build/signed/⚡ Speed Video.shortcut'
+
+      - name: Independently check signatures and workflow action integrity
         shell: bash
-        env:
-          HUBSIGN_API_KEY: ${{ secrets.HUBSIGN_API_KEY }}
         run: |
           set -euo pipefail
-          python3 scripts/hubsign.py --input build/unsigned/Voice-to-Status.wflow --name '🎙️ Voice → Status' --output build/signed/Voice-to-Status.shortcut
-          python3 scripts/hubsign.py --input build/unsigned/Speed-Video.wflow --name '⚡ Speed Video' --output build/signed/Speed-Video.shortcut
-          for shortcut in build/signed/*.shortcut; do
-            tmp="$(mktemp -d)"
-            python3 scripts/extract_signed.py "$shortcut" "$tmp"
-            test -s "$tmp/Shortcut.wflow"
-            rm -rf "$tmp"
-          done
+          python3 scripts/extract_signed.py 'build/signed/🎙️ Voice → Status.shortcut' build/verify-voice
+          python3 scripts/extract_signed.py 'build/signed/⚡ Speed Video.shortcut' build/verify-speed
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+          for name,dir_name in [('Voice-to-Status','verify-voice'),('Speed-Video','verify-speed')]:
+              a=plistlib.loads(Path(f'build/unsigned/{name}.wflow').read_bytes())
+              b=plistlib.loads(Path(f'build/{dir_name}/Shortcut.wflow').read_bytes())
+              assert a['WFWorkflowActions']==b['WFWorkflowActions'],f'Action mismatch: {name}'
+              assert a['WFWorkflowMinimumClientVersion']==b['WFWorkflowMinimumClientVersion']
+              print(f'PASS: {name} ({len(a["WFWorkflowActions"])} actions preserved, AEA1 extracted)')
+          PY
 
-      - name: Upload signed installable shortcuts
-        if: steps.signer.outputs.enabled == 'true'
+      - name: Upload signed Shortcuts ready for device import testing
         uses: actions/upload-artifact@v4
         with:
-          name: ios17-signed-shortcuts
-          path: build/signed/
+          name: ios17-shortcuts-signed-by-shortcuty
+          path: build/signed/*.shortcut
+          if-no-files-found: error
+
+      - name: Upload editable workflow sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios17-shortcuts-editable-sources
+          path: build/unsigned/*.wflow
           if-no-files-found: error
