@@ -1,8 +1,9 @@
-name: Build iOS 17.3.1 Shortcuts
+name: Build and optionally sign Shortcuts
 
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - "donors/**"
       - "scripts/**"
@@ -18,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract donor workflows
+      - name: Extract original iOS 17.3.1 workflows
         shell: bash
         run: |
           set -euo pipefail
@@ -31,12 +32,48 @@ jobs:
             rm -rf "$workdir"
           done
 
-      - name: Build final variants and validate iOS 17 action types
+      - name: Build and validate iOS 17.3.1 workflows
         run: python3 scripts/build_shortcuts.py --in-dir build/extracted --out-dir build/unsigned
 
-      - name: Upload editable and binary workflows (NOT YET signed)
+      - name: Upload editable source workflows
         uses: actions/upload-artifact@v4
         with:
           name: editable-v2-workflows
           path: build/unsigned/
+          if-no-files-found: error
+
+      - name: Check HubSign credential availability
+        id: signer
+        shell: bash
+        env:
+          HUBSIGN_API_KEY: ${{ secrets.HUBSIGN_API_KEY }}
+        run: |
+          if [[ -n "$HUBSIGN_API_KEY" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "HubSign secret not configured; upload only developer workflows."
+          fi
+
+      - name: Sign through official RoutineHub HubSign API
+        if: steps.signer.outputs.enabled == 'true'
+        shell: bash
+        env:
+          HUBSIGN_API_KEY: ${{ secrets.HUBSIGN_API_KEY }}
+        run: |
+          set -euo pipefail
+          python3 scripts/hubsign.py --input build/unsigned/Voice-to-Status.wflow --name '🎙️ Voice → Status' --output build/signed/Voice-to-Status.shortcut
+          python3 scripts/hubsign.py --input build/unsigned/Speed-Video.wflow --name '⚡ Speed Video' --output build/signed/Speed-Video.shortcut
+          for shortcut in build/signed/*.shortcut; do
+            tmp="$(mktemp -d)"
+            python3 scripts/extract_signed.py "$shortcut" "$tmp"
+            test -s "$tmp/Shortcut.wflow"
+            rm -rf "$tmp"
+          done
+
+      - name: Upload signed installable shortcuts
+        if: steps.signer.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios17-signed-shortcuts
+          path: build/signed/
           if-no-files-found: error
