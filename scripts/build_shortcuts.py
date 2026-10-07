@@ -50,11 +50,12 @@ def validate(original: dict, updated: dict, expected_count: int) -> None:
 def voice_build(original: dict) -> dict:
     out = copy.deepcopy(original)
     name = "🎙️ Voice → Status"
+    # Preserve the iOS-proven minimal `sh -c 'ffmpeg && open'` control flow.
     # Showwaves creates animated cyan waveform while keeping the AAC audio.
     # No Shortcuts action was added: only the a-Shell command changes.
     command = " ".join((
-        'rm -f "__status.mp4";',
-        'if ffmpeg -hide_banner -loglevel error -nostats -y',
+        'ls -lh "__audio.m4a" &&',
+        'ffmpeg -hide_banner -loglevel info -stats -y',
         '-f lavfi -i color=c=0x080C13:s=720x1280:r=24',
         '-i "__audio.m4a"',
         '-filter_complex "[1:a]asplit=2[aout][aw];'
@@ -64,9 +65,8 @@ def voice_build(original: dict) -> dict:
         '-map "[v]" -map "[aout]"',
         '-c:v h264_videotoolbox -b:v 950k -pix_fmt yuv420p',
         '-c:a aac -b:a 160k -ar 44100',
-        '-movflags +faststart -shortest "__status.mp4";',
-        f'then open "{callback(name)}";',
-        'else rm -f "__audio.m4a" "__status.mp4"; exit 1; fi',
+        '-movflags +faststart -shortest "__status.mp4" &&',
+        f'open "{callback(name)}"',
     ))
     target = out["WFWorkflowActions"][9]
     assert target["WFWorkflowActionIdentifier"] == "AsheKube.app.a-Shell-mini.ExecuteCommandIntent"
@@ -92,18 +92,18 @@ def speed_build(original: dict) -> dict:
         branch["WFWorkflowActionParameters"]["WFMenuItemTitle"] = label
         execute = copy.deepcopy(proto_execute)
         execute["WFWorkflowActionParameters"]["UUID"] = str(uuid.uuid4()).upper()
+        # Preserve original proven `sh -c 'ffmpeg && open'` control flow.
         # Preserve existing proven speed logic: packet timestamps change,
         # but the H.264/HEVC video bitstream is copied, not transcoded.
         command = " ".join((
-            'rm -f "__acelerado.mov";',
-            'if ffmpeg -hide_banner -loglevel error -nostats -y',
+            'ls -lh "__entrada" &&',
+            'ffmpeg -hide_banner -loglevel info -stats -y',
             '-i "__entrada" -map 0:v:0 -map 0:a:0?',
             '-c:v copy',
             f'-bsf:v "setts=pts=PTS/{speed}:dts=DTS/{speed}:duration=DURATION/{speed}"',
             f'-af "atempo={speed}" -c:a aac -b:a 192k',
-            '-movflags +faststart "__acelerado.mov";',
-            f'then open "{callback(name)}";',
-            'else rm -f "__entrada" "__acelerado.mov"; exit 1; fi',
+            '-movflags +faststart "__acelerado.mov" &&',
+            f'open "{callback(name)}"',
         ))
         execute["WFWorkflowActionParameters"]["command"] = shell(command)
         rebuilt.extend([branch, execute])
