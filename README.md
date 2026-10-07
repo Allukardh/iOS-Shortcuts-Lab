@@ -11,6 +11,15 @@ An open, reproducible Apple Shortcuts gallery targeting **iOS 17.3.1**.
 
 Both are generated using action types harvested from the author's existing **iOS 17.3.1** exports. No speculative new iOS 18+ Shortcut actions are used. They use `a-Shell mini` and its bundled FFmpeg.
 
+## Install-ready gallery (device acceptance pending)
+
+Latest signed `.shortcut` files are published automatically into [`shortcuts/`](./shortcuts) whenever the build passes all checks. Both are generated from genuine iOS 17.3.1 originals and re-signed via Shortcuty, without paid accounts.
+
+- [🎙️ Voice → Status](./shortcuts/%F0%9F%8E%99%EF%B8%8F%20Voice%20%E2%86%92%20Status.shortcut) — audio as portrait video with animated waveform.
+- [⚡ Speed Video](./shortcuts/%E2%9A%A1%20Speed%20Video.shortcut) — finely adjusted speed presets.
+
+**Install:** open a file from the `shortcuts/` directory, choose **Download raw file** if GitHub previews it, transfer to the iPhone (Files/AirDrop), and open with Apple Shortcuts. Keep the two existing working shortcuts installed until the new versions pass real iOS 17.3.1 runtime testing.
+
 ## Automatic reproducible build and signing
 
 **Donors → extract AEA1 → modify bplist → Shortcuty signing API → verify AEA1 → GitHub Actions artifact**.
@@ -29,7 +38,7 @@ To get the latest files, open [GitHub Actions](../../actions/workflows/sign-smok
 - Never publish Apple account credentials, keychain dumps, application passwords, tokens, or private shortcuts.
 - A public signing provider can read a submitted shortcut. Audit any workflow before sending it to a third party.
 - The current signing API is public but its uptime and rate limits are controlled by Shortcuty.
-- Final iOS 17.3.1 import and a-Shell mini execution tests must be done on the user's physical phone.
+- Final iOS 17.3.1 import and a-Shell mini execution tests must be done on the user's physical phone. Successful signing alone does not prove the callback/audio/video workflow on-device.
 
 ## Previous findings
 
