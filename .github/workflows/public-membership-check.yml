@@ -1,0 +1,47 @@
+name: Public RoutineHub and Helper metadata check
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/public-membership-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check publicly documented plan and source-helper latest version
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import re, urllib.request, html
+          urls=[
+            'https://routinehub.co/membership/',
+            'https://routinehub.co/api/v1/shortcuts/10060/versions/latest'
+          ]
+          for url in urls:
+              print('\nURL:', url, flush=True)
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (research, no auth)'})
+                  with urllib.request.urlopen(req,timeout=20) as res:
+                      raw=res.read(1500000).decode('utf-8','replace')
+                      print('STATUS:',res.status,'LENGTH:',len(raw),'TYPE:',res.headers.get('Content-Type'))
+                      if '/versions/latest' in url:
+                          print(raw[:1800])
+                      else:
+                          txt=re.sub(r'(?is)<(script|style).*?</\\1>',' ',raw)
+                          txt=re.sub('<[^>]+>',' ',txt)
+                          txt=html.unescape(txt)
+                          txt=re.sub(r'\\s+',' ',txt)
+                          for term in ['HubSign','ads','advert','free','membership']:
+                              found=list(re.finditer(re.escape(term),txt,re.I))
+                              print('HITS',term,len(found))
+                              for m in found[:5]:
+                                  print('SNIPPET:',txt[max(0,m.start()-110):m.end()+155])
+              except Exception as e:
+                  print('FAILED:',type(e).__name__,str(e)[:200])
+          PY
