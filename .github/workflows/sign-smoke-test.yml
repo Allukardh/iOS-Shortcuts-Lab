@@ -12,7 +12,7 @@ on:
       - ".github/workflows/sign-smoke-test.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -81,3 +81,21 @@ jobs:
           name: ios17-shortcuts-editable-sources
           path: build/unsigned/*.wflow
           if-no-files-found: error
+
+      - name: Publish installable signed shortcuts to repository gallery
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p shortcuts
+          cp 'build/signed/🎙️ Voice → Status.shortcut' 'shortcuts/🎙️ Voice → Status.shortcut'
+          cp 'build/signed/⚡ Speed Video.shortcut' 'shortcuts/⚡ Speed Video.shortcut'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add shortcuts/
+          if git diff --cached --quiet; then
+            echo 'No changes in signed releases.'
+          else
+            git commit -m 'dist: publish verified signed shortcuts [skip ci]'
+            git push origin HEAD:main
+          fi
