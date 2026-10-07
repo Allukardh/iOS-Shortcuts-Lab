@@ -1,0 +1,30 @@
+name: One-time Remote Sign verification
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/gluebyte-signing-probe.yml"
+      - "scripts/probe_gluebyte.py"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract one real iOS 17.3.1 donor
+        run: python3 scripts/extract_signed.py donors/Voice-to-Status.original.shortcut build/extracted/voice
+      - name: Probe gluebyte Remote Sign through HTTPS
+        run: python3 scripts/probe_gluebyte.py build/extracted/voice/Shortcut.wflow build/probe.signed.shortcut
+      - name: Independently extract returned AEA1
+        run: python3 scripts/extract_signed.py build/probe.signed.shortcut build/verified
+      - name: Upload verified signed probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: gluebyte-signed-probe
+          path: build/probe.signed.shortcut
+          if-no-files-found: error
