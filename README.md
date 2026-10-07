@@ -18,17 +18,17 @@ The donor actions use **a-Shell mini** on iOS. The stock `ffmpeg` executable ins
 3. `scripts/build_shortcuts.py`: edit the underlying workflow using only original iOS 17.3.1 action IDs; preserve silent a-Shell callback pattern. Emit editable XML `.plist` and unsigned `.wflow` files.
 4. GitHub Actions builds and uploads source workflows as artifacts.
 
-### Signing status — needs a separate solution
+### Signing — HubSign optional CI integration
 
 The first real [macOS runner signing attempt](../../actions) successfully extracted the 15-action Speed Video donor, then **Apple’s** `shortcuts sign --mode anyone` failed with **“In order to do this, you must be signed into iCloud.”**
 
 A hosted macOS Actions runner is ephemeral and not logged into the owner’s Apple ID. **Do not put Apple ID passwords, two-factor codes, or session cookies into GitHub Actions secrets or into this repository.**
 
-Legitimate candidates:
-- Sign on a trusted persistent macOS machine with iCloud already configured.
-- RoutineHub **HubSign** documented API (requires a separate HubSign key and eligible membership or partner access). Review its terms and third-party data handling before enabling it.
+The build now includes an optional **official RoutineHub HubSign** signing step. To activate it, obtain an eligible RoutineHub membership and a dedicated **HubSign** API key. Add this key **only** to GitHub → Repository Settings → Secrets and variables → Actions → New repository secret with name `HUBSIGN_API_KEY`. Never share passwords or tokens in source code or chat. The next `workflow_dispatch` build will use the key privately to sign both shortcuts. The API returns an AEA1 signed file; CI also tries to extract it before publishing the artifacts.
 
-Until successful signing and an on-device import/run test, the CI artifacts are **editable developer workflows only — NOT installable releases**.
+Alternative: sign on a trusted persistent Mac with iCloud configured.
+
+When no HubSign secret is configured, the CI produces **editable developer workflows only**. After signing succeeds, the build additionally publishes signed `.shortcut` files. **On-device iOS 17.3.1 import/run tests are still required**.
 
 ## Testing
 Locally verified FFmpeg `showwaves` output with H.264/AAC video and `setts` / `atempo` speed changes for **both H.264 and HEVC**. iPhone / a-Shell mini execution still requires final testing after signing.
