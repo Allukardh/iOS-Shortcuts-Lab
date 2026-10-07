@@ -1,24 +1,24 @@
-name: Shortcut donor extraction (iOS 17)
+name: Build iOS 17.3.1 Shortcuts
 
 on:
   workflow_dispatch:
   push:
     paths:
       - "donors/**"
-      - "scripts/extract_signed.py"
+      - "scripts/**"
       - ".github/workflows/sign-smoke-test.yml"
 
 permissions:
   contents: read
 
 jobs:
-  extract:
+  build:
     runs-on: macos-15
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract signed AEA1 originals (no iCloud login required)
+      - name: Extract donor workflows
         shell: bash
         run: |
           set -euo pipefail
@@ -28,13 +28,15 @@ jobs:
             workdir="$(mktemp -d)"
             python3 scripts/extract_signed.py "$input" "$workdir"
             cp "$workdir/Shortcut.wflow" "build/extracted/$name.wflow"
-            python3 -c 'import plistlib,sys; p=plistlib.load(open(sys.argv[1],"rb")); plistlib.dump(p,open(sys.argv[2],"wb"),fmt=plistlib.FMT_XML,sort_keys=False)' "$workdir/Shortcut.wflow" "build/extracted/$name.plist"
             rm -rf "$workdir"
           done
 
-      - name: Upload editable donors
+      - name: Build final variants and validate iOS 17 action types
+        run: python3 scripts/build_shortcuts.py --in-dir build/extracted --out-dir build/unsigned
+
+      - name: Upload editable and binary workflows (NOT YET signed)
         uses: actions/upload-artifact@v4
         with:
-          name: extracted-workflows
-          path: build/extracted/
+          name: editable-v2-workflows
+          path: build/unsigned/
           if-no-files-found: error
