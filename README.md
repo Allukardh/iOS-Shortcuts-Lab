@@ -35,3 +35,12 @@ Locally verified FFmpeg `showwaves` output with H.264/AAC video and `setts` / `a
 
 ## Safety
 Before sharing a new Shortcut publicly, review the workflow for tokens, secrets, personally identifiable paths or sensitive data.
+
+
+### Free signing availability check (2026-10-06)
+
+The documented **RoutineHub API** `POST /api/v1/sign-shortcut` requires a dedicated HubSign key and a membership with access, except for approved partners. An ad-supported consumer-facing website flow, even if available, does not establish unattended API access.
+
+A single compatibility probe of the public `https://hubsign.routinehub.services/sign` endpoint used by the open-source Cherri compiler was made on macOS GitHub Actions (run 37563371931). It returned **HTTP 200, Content-Type: text/html, 261422 bytes**, **not an AEA1-signed shortcut**. The precise cause of the HTML response was not determined; we cannot currently rely on this for unattended, credential-free signing. Do not interpret the HTTP 200 as a successful signature.
+
+No account signup or paid membership has been requested. Builds without a HubSign API key remain unsigned developer artifacts.
