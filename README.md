@@ -20,11 +20,14 @@ Latest signed `.shortcut` files are published automatically into [`shortcuts/`](
 
 **Install:** open a file from the `shortcuts/` directory, choose **Download raw file** if GitHub previews it, transfer to the iPhone (Files/AirDrop), and open with Apple Shortcuts. Keep the two existing working shortcuts installed until the new versions pass real iOS 17.3.1 runtime testing.
 
-## Experimental Universal status (iOS 17.3.1)
+## ✅ Speed Video Universal v4 — tested successfully on iOS 17.3.1
 
-**Do not install the Universal variants as replacements for the two working shortcuts.** Universal v1, v2, and v3 all **failed on the device**: the source video successfully arrived in a-Shell, but the expected AIFF output from Shortcuts' native *Encode Media* / transfer chain never appeared. The native Audio Test also produced *No Item* in Quick Look for both Instagram and ordinary iPhone camera clips. The `Get file not found` errors are downstream.
+The user **successfully tested** [⚡ Speed Video Universal v4](./shortcuts/%E2%9A%A1%20Speed%20Video%20Universal%20v4.shortcut) against an Instagram H.264 clip with **xHE-AAC/USAC audio**, which caused an assertion failure in a-Shell mini FFmpeg's AAC decoder. The same v4 also succeeded with ordinary clips that traditional Speed Video handled. At **1.5×**, the problematic ~124s source became **82.67 seconds**, copying video without recompression (`-c:v copy`) and encoding the prepared audio to AAC-LC.
 
-The user exported an iOS 17.3.1-edited Universal v3. Semantic comparison revealed the generator omitted the **`WFMedia` input parameter** on native `Encode Media` (it incorrectly relied on `WFInput` alone). This is now fixed and regression-tested against the genuine iOS export. The corrected, signed v3 is in `shortcuts/` and in Drive under `iOS-Shortcuts-Lab/Universal-v3-WFMedia/`. **Its actual device operation remains unverified**: test with a short iPhone camera video before the problematic xHE-AAC Instagram download. See [issue #1](../../issues/1). The existing **⚡ Speed Video** and **🎙️ Voice → Status** remain the working, unchanged choices.
+**How it works:** native iOS 17 Encode Media extracts source audio to AIFF, then a-Shell FFmpeg opens the original video with `-analyzeduration 0 -probesize 32 -an` (avoiding the buggy USAC audio stream) and joins its unchanged video stream to sped-up AIFF audio. The native action input field `WFMedia` is regression-tested against the user's genuine iOS 17 export. [Diagnosis and on-device acceptance](../../issues/1).
+
+**Limits:** success is confirmed for the specific USAC/H.264 clip and several ordinary videos; do not infer compatibility with every codec or container (especially AV1). V4 requires a source audio track and uses extra temporary storage and native conversion work; the traditional **⚡ Speed Video** remains the simpler option for compatible clips. Production originals are unchanged.
+
 
 ## Automatic reproducible build and signing
 
