@@ -12,13 +12,18 @@ A small gallery of **real-device-tested Shortcuts for iOS 17.3.1**, built from t
 
 The matching three verified signed files are the *only three shortcuts* in the user's Google Drive `iOS-Shortcuts-Lab` release folder. Earlier failing files, diagnostic folders and donor duplicates were removed from Drive after their source code and donor exports were preserved here in Git history.
 
-## 🧪 Experimental, not a replacement
+## 🧪 Smart Speed v5.2 — experimental (NOT a replacement yet)
 
-[⚡ Speed Video Smart Test — v5 prototype](./shortcuts/experimental/%E2%9A%A1%20Speed%20Video%20Smart%20Test.shortcut) lives under `shortcuts/experimental/` **only**, not in the three-file release folder. It attempts the traditional FFmpeg-only fast path, then automatically calls itself with `FALLBACK_<speed>` and uses native iOS audio decoding to retry through v4 if the direct FFmpeg process fails.
+[⚡ Speed Video Smart v5.2](./shortcuts/experimental/%E2%9A%A1%20Speed%20Video%20Smart%20v5.2.shortcut) is the only active beta. It tests a codec-preflight workflow using iOS 17's native **If** action, **not** unreliable conditional expressions in a-Shell's non-POSIX `sh`.
 
-This includes the original codec handling and all five speed choices but **needs a physical iOS 17.3.1 test before promotion**, specifically to prove an a-Shell FFmpeg assertion allows the fallback callback and that Shortcuts' Get File → Encode Media pipeline recognizes the retrieved movie. If the test passes, the Smart version can replace traditional **⚡ Speed Video**, keeping three release files overall. See [v5 test plan](./docs/speed-video-smart-v5.md).
+1. A short `ffprobe` invocation records the audio profile and calls back to the Shortcut (`PROBE_<speed>`).
+2. Native Shortcuts **Get File → Get Text → If** examines the codec report.
+3. AAC-LC goes through the original fast FFmpeg command; other audio formats use Apple's native audio-to-AIFF preparation and the accepted Universal v4 command.
+4. Only the validated `&& open FINALIZAR` callback performs save/cleanup.
 
-**Keep current validated releases installed and unchanged until v5 is proven.** Importing another Shortcut with the same name can add a number (`1`) and break the `FINALIZAR` name-based callback. The beta uses a unique internal name so it can run alongside them.
+The user's **v5** failed with `if: command not found`. Their **v5.1** did not process video because an attempted nested `sh` / `||` structure was unsupported in practice. Those test shortcuts were removed from the active gallery. [Investigation and remaining test requirements](../../issues/2).
+
+**Important:** v5.2 has passed signature and static action graph validation, **not actual iOS 17.3.1 runtime verification**. The initial `ffprobe` callback, native Get Text/If decision, and original-video retrieval still require one ordinary and one USAC test on the phone. Keep the three validated releases unchanged.
 
 ## Proven implementation
 
