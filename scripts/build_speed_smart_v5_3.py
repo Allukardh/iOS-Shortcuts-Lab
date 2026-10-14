@@ -157,7 +157,7 @@ def build(donor:dict, ios:dict)->dict:
     ids=[x["WFWorkflowActionParameters"].get("UUID") for x in steps]
     ids=[i for i in ids if i]
     assert len(ids)==len(set(ids))
-    assert len(steps)==64, len(steps)
+    assert len(steps)==71, len(steps)
     print(f"PASS: {len(steps)} actions, five foreground-free ffprobe preflights, five direct & five native fallback FFmpeg jobs.")
     return result
 
