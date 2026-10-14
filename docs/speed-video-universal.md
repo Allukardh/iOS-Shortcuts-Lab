@@ -5,6 +5,12 @@
 This is a separately named Shortcuts variant for Instagram downloads or other
 videos whose audio fails inside the FFmpeg AAC/USAC decoder.
 
+## iOS 17.3.1 test status (v2, 2026-10-13)
+
+First Universal and Audio Test builds returned no AIFF output even for ordinary camera video. This rules out xHE-AAC as the *sole* cause of the absent output. Version 2 replaces the speculative `WFAVAssetContentItem` coercion with the exact proven `ExtensionInput` token from the donor and removes the explicit `ActionOutput` reference containing the hardcoded English `OutputName="Encoded Media"`. The Rename action now receives the previous action's output implicitly, following native Shortcuts data-flow convention.
+
+Signed and validated on macOS GitHub Actions; **not yet validated on iOS**. To test, delete only the old malfunctioning `⚡ Speed Video Universal` before importing v2, otherwise iOS might auto-rename to `⚡ Speed Video Universal 1` and the callback will not locate it. This is an experimental targeted repair, not proof that iOS can decode every codec.
+
 ## Pipeline
 
 1. Shared video is copied unchanged into a-Shell mini.
