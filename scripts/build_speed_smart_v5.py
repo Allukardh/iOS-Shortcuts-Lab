@@ -14,7 +14,7 @@ import argparse, copy, plistlib, uuid
 from pathlib import Path
 from urllib.parse import quote
 
-NAME='⚡ Speed Video Smart Test'
+NAME='⚡ Speed Video Smart v5.1'
 SOURCE='__smart_source.mp4'
 AUDIO='__smart_audio.aiff'
 OUTPUT='__smart_result.mp4'
@@ -50,8 +50,19 @@ def fast(speed):
         f'-bsf:v "setts=pts=PTS/{speed}:dts=DTS/{speed}:duration=DURATION/{speed}"',
         f'-af "atempo={speed}" -c:a aac -b:a 192k -movflags +faststart "{OUTPUT}"'
     ))
-    return (f'if {movie} && test -s "{OUTPUT}"; then open "{cb("FINALIZAR")}"; '
-            f'else rm -f "{OUTPUT}"; open "{cb("FALLBACK_"+speed)}"; fi')
+    # a-Shell mini's ios_system sh_main is NOT a POSIX shell:
+    # it supports only AND- or OR-linked command lists and cannot parse if/fi.
+    # Also, mixing && and || in one list is not POSIX-compatible there:
+    # on failed && ios_system returns before reaching the later ||.
+    # NESTED sh is required: inner AND-chain handles success and returns a
+    # nonzero failure to the outer OR-chain for the fallback callback.
+    # Fixed filenames and filter expressions contain no spaces; only the
+    # callback URL needs quoted protection inside the nested string.
+    movie=movie.replace('"', '')
+    success=f'open "{cb("FINALIZAR")}"'
+    inner=f'rm -f {OUTPUT} && {movie} && {success}'
+    quoted=inner.replace('\\', '\\\\').replace('"', '\\"')
+    return f'sh -c "{quoted}" || open "{cb("FALLBACK_"+speed)}"'
 
 def safe(speed):
     return ' '.join((
@@ -125,6 +136,10 @@ def build(donor,ios):
     assert len(ids)==len(set(ids))
     cmds=[a['WFWorkflowActionParameters']['command'] for a in acts if a['WFWorkflowActionIdentifier']==EXEC and 'ffmpeg' in a['WFWorkflowActionParameters'].get('command','')]
     assert len(cmds)==10,len(cmds)
+    fast_cmds=[c for c in cmds if 'analyzeduration 0' not in c]
+    assert len(fast_cmds)==5
+    assert all('if ffmpeg' not in x and '; then ' not in x for x in fast_cmds)
+    assert all('sh -c "rm -f ' in x and ' || open ' in x for x in fast_cmds)
     for rate in SPEEDS:
         assert sum('FALLBACK_'+rate in c for c in cmds)==1
         assert any(f'atempo={rate}' in c and f'analyzeduration 0' in c for c in cmds)
