@@ -12,18 +12,15 @@ A small gallery of **real-device-tested Shortcuts for iOS 17.3.1**, built from t
 
 The matching three verified signed files are the *only three shortcuts* in the user's Google Drive `iOS-Shortcuts-Lab` release folder. Earlier failing files, diagnostic folders and donor duplicates were removed from Drive after their source code and donor exports were preserved here in Git history.
 
-## 🧪 Smart Speed v5.2 — experimental (NOT a replacement yet)
+## 🧪 Smart Speed — tested v5.2 and one-foreground experimental v5.3
 
-[⚡ Speed Video Smart v5.2](./shortcuts/experimental/%E2%9A%A1%20Speed%20Video%20Smart%20v5.2.shortcut) is the only active beta. It tests a codec-preflight workflow using iOS 17's native **If** action, **not** unreliable conditional expressions in a-Shell's non-POSIX `sh`.
+[⚡ Speed Video Smart v5.2](./shortcuts/experimental/%E2%9A%A1%20Speed%20Video%20Smart%20v5.2.shortcut) **successfully ran on physical iOS 17.3.1** with conventional AAC and the problematic xHE-AAC/USAC source. It identifies the source audio's profile with `ffprobe` and uses iOS native **If** to choose the fast direct pipeline or native iOS → AIFF → Universal v4 pipeline. The user reported a drawback: **two visible a-Shell appearances**, one for probing and one for FFmpeg.
 
-1. A short `ffprobe` invocation records the audio profile and calls back to the Shortcut (`PROBE_<speed>`).
-2. Native Shortcuts **Get File → Get Text → If** examines the codec report.
-3. AAC-LC goes through the original fast FFmpeg command; other audio formats use Apple's native audio-to-AIFF preparation and the accepted Universal v4 command.
-4. Only the validated `&& open FINALIZAR` callback performs save/cleanup.
+[⚡ Speed Video Smart v5.3](./shortcuts/experimental/%E2%9A%A1%20Speed%20Video%20Smart%20v5.3.shortcut) moves **ffprobe** into the **nonforeground a-Shell mini Intent Extension** (`openWindow=close`), and then runs the profile selection in the same Shortcuts invocation. The only intended foreground app opening is the final FFmpeg job. Native iOS conversion takes the **original Share Sheet input** rather than retrieving a large movie from the a-Shell storage.
 
-The user's **v5** failed with `if: command not found`. Their **v5.1** did not process video because an attempted nested `sh` / `||` structure was unsupported in practice. Those test shortcuts were removed from the active gallery. [Investigation and remaining test requirements](../../issues/2).
+This architecture comes directly from the upstream a-Shell mini [ExecuteCommandIntentHandler.swift](https://github.com/holzschu/a-shell/blob/master/a-Shell-Intents/ExecuteCommandIntentHandler.swift), whose forced close mode executes via `ios_system` inside the app group's extension; the developer advises <5s lightweight tasks.
 
-**Important:** v5.2 has passed signature and static action graph validation, **not actual iOS 17.3.1 runtime verification**. The initial `ffprobe` callback, native Get Text/If decision, and original-video retrieval still require one ordinary and one USAC test on the phone. Keep the three validated releases unchanged.
+**Status: v5.3 signed and structure-verified, NOT yet tested on the phone.** A forced extension `ffprobe` may still fail if required libraries are unavailable in the extension or execution exceeds the time limit. Its `WFMedia` native audio input matches the user's real iOS 17.3.1 export. The v5.2 beta and three proven releases remain unchanged until real-device acceptance. [v5.3 design and test plan](./docs/speed-video-smart-v5-3.md) · [Issue #2](../../issues/2).
 
 ## Proven implementation
 
@@ -38,7 +35,7 @@ The user's **v5** failed with `if: command not found`. Their **v5.1** did not pr
 
 GitHub Actions processes: **signed donor → macOS AEA1 extraction → binary plist action construction → Shortcuty public signing API → AEA1 integrity check → signed .shortcut**.
 
-[Universal v4 accepted build](../../actions/runs/38506099255) · [Smart v5 experimental workflow](../../actions/workflows/build-speed-smart-v5.yml) · [xHE-AAC investigation (closed)](../../issues/1).
+[Universal v4 accepted build](../../actions/runs/38506099255) · [Smart v5.3 experimental workflow](../../actions/workflows/build-speed-smart-v5-3.yml) · [xHE-AAC investigation (closed)](../../issues/1).
 
 Sources and old references stay in `scripts/`, `donors/`, Git history and `docs/`; failed signed binaries are no longer promoted as gallery releases.
 
