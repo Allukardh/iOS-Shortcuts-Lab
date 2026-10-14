@@ -24,7 +24,7 @@ Latest signed `.shortcut` files are published automatically into [`shortcuts/`](
 
 **Do not install the Universal variants as replacements for the two working shortcuts.** Universal v1, v2, and v3 all **failed on the device**: the source video successfully arrived in a-Shell, but the expected AIFF output from Shortcuts' native *Encode Media* / transfer chain never appeared. The native Audio Test also produced *No Item* in Quick Look for both Instagram and ordinary iPhone camera clips. The `Get file not found` errors are downstream.
 
-We are suspending speculative builds until we obtain and compare a **known-good native iOS 17.3.1-exported `.shortcut` containing Encode Media → Quick Look**, tested successfully on a camera video. See [issue #1](../../issues/1). The existing **⚡ Speed Video** and **🎙️ Voice → Status** remain the working, unchanged choices.
+The user exported an iOS 17.3.1-edited Universal v3. Semantic comparison revealed the generator omitted the **`WFMedia` input parameter** on native `Encode Media` (it incorrectly relied on `WFInput` alone). This is now fixed and regression-tested against the genuine iOS export. The corrected, signed v3 is in `shortcuts/` and in Drive under `iOS-Shortcuts-Lab/Universal-v3-WFMedia/`. **Its actual device operation remains unverified**: test with a short iPhone camera video before the problematic xHE-AAC Instagram download. See [issue #1](../../issues/1). The existing **⚡ Speed Video** and **🎙️ Voice → Status** remain the working, unchanged choices.
 
 ## Automatic reproducible build and signing
 
