@@ -1,0 +1,80 @@
+name: Build experimental Speed Video Universal v4
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_universal_v4.py"
+      - ".github/workflows/build-universal-v4.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract original iOS 17.3.1 donor
+        run: python3 scripts/extract_signed.py donors/Speed-Video.original.shortcut build/donor
+
+      - name: Build versioned v4 (old releases untouched)
+        run: |
+          python3 scripts/build_universal_v4.py --donor build/donor/Shortcut.wflow \
+            --output build/unsigned/universal-v4.wflow
+
+      - name: Verify iOS-authored native audio source field
+        run: |
+          python3 scripts/extract_signed.py 'donors/Speed-Universal-v3.iOS17-edited.shortcut' build/ios-reference
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+          new=plistlib.loads(Path("build/unsigned/universal-v4.wflow").read_bytes())
+          ref=plistlib.loads(Path("build/ios-reference/Shortcut.wflow").read_bytes())
+          def enc(obj):
+              return next(x['WFWorkflowActionParameters'] for x in obj['WFWorkflowActions']
+                          if x['WFWorkflowActionIdentifier']=='is.workflow.actions.encodemedia')
+          for key in ['WFMedia','WFInput','WFMediaAudioOnly','WFMediaAudioFormat']:
+              assert enc(new)[key] == enc(ref)[key],key
+          assert len(new['WFWorkflowActions'])==24
+          print("PASS: iOS 17 native Decode Media workflow input and 24 actions")
+          PY
+
+      - name: Sign with public Shortcuty server
+        run: |
+          python3 scripts/sign_shortcuty.py \
+            --input build/unsigned/universal-v4.wflow \
+            --upload-filename '⚡ Speed Video Universal v4.shortcut' \
+            --output 'build/signed/⚡ Speed Video Universal v4.shortcut'
+
+      - name: Verify AEA1 signed action equality
+        run: |
+          python3 scripts/extract_signed.py 'build/signed/⚡ Speed Video Universal v4.shortcut' build/verified
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+          a=plistlib.loads(Path('build/unsigned/universal-v4.wflow').read_bytes())
+          b=plistlib.loads(Path('build/verified/Shortcut.wflow').read_bytes())
+          assert a['WFWorkflowActions']==b['WFWorkflowActions']
+          print('PASS: output AEA1 contains exactly intended 24 actions')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speed-video-universal-v4-signed-experimental
+          path: build/signed/*.shortcut
+          if-no-files-found: error
+
+      - name: Publish only new v4 shortcut to gallery
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp 'build/signed/⚡ Speed Video Universal v4.shortcut' 'shortcuts/⚡ Speed Video Universal v4.shortcut'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'shortcuts/⚡ Speed Video Universal v4.shortcut'
+          git commit -m 'dist: add universal v4 USAC-safe experimental [skip ci]'
+          git push origin HEAD:main
