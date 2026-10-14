@@ -1,23 +1,30 @@
-# ⚡ Smart Speed v5.3 (one-foreground-app experiment)
+# ⚡ Speed Video Smart v5.3 — one foreground appearance experiment
 
-This is a **beta** for iOS **17.3.1**, separate from the proven v4 and v5.2.
+The current v5.2 **works** for normal AAC-LC and USAC according to actual device testing, but **opens a-Shell mini twice**: once for ffprobe and once for FFmpeg. Production v4 uses one foreground appearance but always performs the slower Apple AIFF audio extraction.
 
-## Why the double appearance could be eliminated
+## What we learned by reading the upstream app code
+[`ExecuteCommandIntentHandler.swift`](https://github.com/holzschu/a-shell/blob/master/a-Shell-Intents/ExecuteCommandIntentHandler.swift) confirms:
+- `openWindow=.close` **forces extension execution**, rather than presenting the app interface.
+- Extension commands run within the **same app group** files as the normal app.
+- Auto-choice `localCommands` omits ffprobe, but `openWindow=.close` bypasses that automatic selection and executes via `ios_system`.
+- The developer warns extension jobs should finish in ~5 seconds.
+- `GetFileIntentHandler` reads from the same app-group folder without launching the app.
 
-According to the [a-Shell mini upstream ExecuteCommandIntentHandler.swift](https://github.com/holzschu/a-shell/blob/master/a-Shell-Intents/ExecuteCommandIntentHandler.swift), an Execute command with **openWindow = close** runs in an iOS Intent extension, in the same app-group folder where the **PutFile** and **GetFile** intents operate. In *auto* mode, ffprobe is absent from the list of lightweight localCommands and therefore the app opens. Explicit *close* forces the extension execution path.
+Thus an extension-only **read-only ffprobe** is technically promising, but ffprobe's extension-time framework loading and codecs are not yet device-verified.
 
-The extension has limited runtime, and the developer only describes it as appropriate for commands that do not require UI and run in **under 5 seconds**. No guarantee that the bundled ffprobe works from an app extension on a physical iOS 17.3.1 device.
+## v5.3 algorithm
+1. Receive video, copy to a-Shell mini via PutFile intent (no UI launch).
+2. User selects speed 1.1×–1.5×.
+3. Execute `ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,profile ... > __smart_profile.txt` with **Run in Extension / openWindow=close**.
+4. Native GetFile / Get Text / If reads the report.
+5. If AAC profile LC, launch a-Shell for direct fast FFmpeg (no AIFF).
+6. Otherwise Apple's native Encode Media **directly from the original Share Sheet input** creates AIFF, then launch a-Shell to do the physically successful Universal v4 video-only / audio-AIFF method.
+7. FIN callback saves to Photos and cleans temporary files.
 
-## Data path
-
-Video Share Sheet → copy file using original working PutFile → pick 1.1× through 1.5× → **offscreen** ffprobe → native Get File / Detect Text / If → fast ffmpeg for AAC-LC or native audio AIFF plus proven Universal-v4 ffmpeg for other profiles → FINALIZAR Photo save/cleanup.
-
-Normal AAC-LC and source H.264+xHE-AAC were confirmed on prior **v5.2**, which opened a-Shell twice. This build changes only the placement, code path and foreground setting of the ffprobe probe. Every video still receives a single FFmpeg conversion; there should be exactly one foreground a-Shell appearance **if the extension supports ffprobe**.
-
-## Required test and clear stop condition
-
-1. Import *⚡ Speed Video Smart v5.3* without overwriting old shortcuts; test a short camera video. Confirm only one foreground a-Shell.
-2. Test the previously working Instagram xHE-AAC video; confirm just one foreground a-Shell.
-3. If the shortcut stops at ffprobe with `command not found`, a failed action, or exceeds the extension's allowed time, **do not infer FFmpeg/codec failure**. Fall back to v5.2 and do not tamper with the stable releases.
-
-Signed builds are not on-device validation.
+## Acceptance conditions
+- First test a short iPhone camera AAC-LC video and then the already-known Instagram H.264/USAC video. Each should show **at most one foreground a-Shell interface appearance** for FFmpeg.
+- If the first test fails at the ffprobe step, that indicates ffprobe cannot execute within the a-Shell mini Intent Extension; stop testing and do not replace v4 or v5.2.
+- If probe succeeds but output fails, inspect whether Get File → Get Text → If worked and whether native Encode Media got the share input.
+- A signed .shortcut and structurally correct 64 actions **do not verify the extension runtime**.
+- We have not verified AV1, audio-less movies or every media container.
+- Do not delete the 3 real-world-validated release shortcuts. Drive root carries beta only; release folder must stay at exactly three files.
