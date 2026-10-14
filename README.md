@@ -20,6 +20,12 @@ Latest signed `.shortcut` files are published automatically into [`shortcuts/`](
 
 **Install:** open a file from the `shortcuts/` directory, choose **Download raw file** if GitHub previews it, transfer to the iPhone (Files/AirDrop), and open with Apple Shortcuts. Keep the two existing working shortcuts installed until the new versions pass real iOS 17.3.1 runtime testing.
 
+## Experimental Universal status (iOS 17.3.1)
+
+**Do not install the Universal variants as replacements for the two working shortcuts.** Universal v1, v2, and v3 all **failed on the device**: the source video successfully arrived in a-Shell, but the expected AIFF output from Shortcuts' native *Encode Media* / transfer chain never appeared. The native Audio Test also produced *No Item* in Quick Look for both Instagram and ordinary iPhone camera clips. The `Get file not found` errors are downstream.
+
+We are suspending speculative builds until we obtain and compare a **known-good native iOS 17.3.1-exported `.shortcut` containing Encode Media → Quick Look**, tested successfully on a camera video. See [issue #1](../../issues/1). The existing **⚡ Speed Video** and **🎙️ Voice → Status** remain the working, unchanged choices.
+
 ## Automatic reproducible build and signing
 
 **Donors → extract AEA1 → modify bplist → Shortcuty signing API → verify AEA1 → GitHub Actions artifact**.
