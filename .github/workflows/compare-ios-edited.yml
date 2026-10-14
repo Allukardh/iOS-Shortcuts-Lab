@@ -1,0 +1,54 @@
+name: Compare iOS-edited Universal v3 against generated source
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "donors/Speed-Universal-v3.iOS17-edited.shortcut"
+      - ".github/workflows/compare-ios-edited.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: macos-15
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract both signed AEA1 versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/extract_signed.py 'donors/Speed-Universal-v3.iOS17-edited.shortcut' build/edited
+          python3 scripts/extract_signed.py 'shortcuts/⚡ Speed Video Universal v3.shortcut' build/generated
+      - name: Print structural differences without full workflow content
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import plistlib,json
+          from pathlib import Path
+          a=plistlib.loads(Path("build/generated/Shortcut.wflow").read_bytes())
+          b=plistlib.loads(Path("build/edited/Shortcut.wflow").read_bytes())
+          print('Workflow versions:',{x:(a.get(x),b.get(x)) for x in ['WFWorkflowMinimumClientVersion','WFWorkflowClientVersion']})
+          x,y=a['WFWorkflowActions'],b['WFWorkflowActions']
+          print('Action counts:',len(x),len(y))
+          if len(x)!=len(y):raise SystemExit('Changed action count: inspect manually')
+          for i,(old,new) in enumerate(zip(x,y)):
+            if old!=new:
+              ident=new.get('WFWorkflowActionIdentifier')
+              print(f'CHANGED ACTION #{i}: {ident}')
+              pa=old.get('WFWorkflowActionParameters',{})
+              pb=new.get('WFWorkflowActionParameters',{})
+              for key in sorted(pa.keys()|pb.keys()):
+                if pa.get(key)!=pb.get(key):
+                  print('PARAM',key)
+                  if key in ['WFInput','WFMediaAudioOnly','WFMediaAudioFormat','WFMediaSpeed','UUID','CustomOutputName']:
+                    print(' BEFORE:',json.dumps(pa.get(key),ensure_ascii=False,default=str)[:1000])
+                    print(' AFTER :',json.dumps(pb.get(key),ensure_ascii=False,default=str)[:1000])
+                  else:
+                    print(' VALUE CHANGED (omitted)')
+          native=next((x for x in y if x.get('WFWorkflowActionIdentifier')=='is.workflow.actions.encodemedia'),None)
+          print('EDITED ENCODER:',json.dumps(native,ensure_ascii=False,default=str)[:4000])
+          PY
