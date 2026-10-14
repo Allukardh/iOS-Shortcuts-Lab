@@ -57,7 +57,7 @@ def construct(donor, ios):
         expected=[m.COND,m.GET,"is.workflow.actions.detect.text",m.COND,
                   m.EXEC,m.COND,m.GET,"is.workflow.actions.encodemedia",
                   "is.workflow.actions.setitemname",m.PUT,m.EXEC,m.COND,
-                  "is.workflow.actions.stop",m.COND,m.COND]
+                  "is.workflow.actions.exit",m.COND,m.COND]
         assert identifiers==expected, (rate,identifiers)
         # Use already verified v5.2 branch graph, but move it directly
         # underneath the matching menu option. Remove PROBE_x callback
