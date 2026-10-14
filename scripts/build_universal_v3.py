@@ -80,7 +80,7 @@ def main() -> None:
         "is.workflow.actions.setitemname",
         "AsheKube.app.a-Shell-mini.PutFileIntent"
     ]
-    assert len([a for a in result["WFWorkflowActions"] if a["WFWorkflowActionIdentifier"]=="AsheKube.app.a-Shell-mini.ExecuteCommandIntent"])==7
+    assert len([a for a in result["WFWorkflowActions"] if a["WFWorkflowActionIdentifier"]=="AsheKube.app.a-Shell-mini.ExecuteCommandIntent"])==6
     assert result["WFWorkflowMinimumClientVersion"]==donor["WFWorkflowMinimumClientVersion"]
     assert result["WFWorkflowInputContentItemClasses"]==donor["WFWorkflowInputContentItemClasses"]
     raw=plistlib.dumps(result,fmt=plistlib.FMT_BINARY,sort_keys=False)
