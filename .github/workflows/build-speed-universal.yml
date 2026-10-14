@@ -1,0 +1,71 @@
+name: Build Speed Video Universal (experimental)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_speed_universal.py"
+      - ".github/workflows/build-speed-universal.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build-universal:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract original iOS 17.3.1 Speed Video workflow
+        run: python3 scripts/extract_signed.py donors/Speed-Video.original.shortcut build/donor
+
+      - name: Build new universal variant (old originals unchanged)
+        run: |
+          python3 scripts/build_speed_universal.py \
+            --donor build/donor/Shortcut.wflow \
+            --output build/unsigned/speed-universal.wflow
+
+      - name: Sign variant using public Shortcuty service
+        run: |
+          python3 scripts/sign_shortcuty.py \
+            --input build/unsigned/speed-universal.wflow \
+            --upload-filename '⚡ Speed Video Universal.shortcut' \
+            --output 'build/signed/⚡ Speed Video Universal.shortcut'
+
+      - name: Verify AEA1 signed workflow retains exact 24 intended actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/extract_signed.py 'build/signed/⚡ Speed Video Universal.shortcut' build/verified
+          python3 - <<'PY'
+          from pathlib import Path
+          import plistlib
+          a=plistlib.loads(Path('build/unsigned/speed-universal.wflow').read_bytes())
+          b=plistlib.loads(Path('build/verified/Shortcut.wflow').read_bytes())
+          assert a['WFWorkflowActions'] == b['WFWorkflowActions']
+          assert a['WFWorkflowMinimumClientVersion'] == b['WFWorkflowMinimumClientVersion']
+          assert len(b['WFWorkflowActions']) == 24
+          print('PASS: all 24 actions and minimum iOS version preserved by signer')
+          PY
+
+      - name: Upload installable test variant
+        uses: actions/upload-artifact@v4
+        with:
+          name: speed-video-universal-ios17-experimental
+          path: build/signed/*.shortcut
+          if-no-files-found: error
+
+      - name: Publish only new shortcut (do not touch existing releases)
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p shortcuts
+          cp 'build/signed/⚡ Speed Video Universal.shortcut' 'shortcuts/⚡ Speed Video Universal.shortcut'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'shortcuts/⚡ Speed Video Universal.shortcut'
+          git commit -m 'dist: experimental Speed Video Universal [skip ci]'
+          git push origin HEAD:main
