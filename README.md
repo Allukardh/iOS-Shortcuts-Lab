@@ -1,54 +1,40 @@
 # iOS Shortcuts Lab
 
-An open, reproducible Apple Shortcuts gallery targeting **iOS 17.3.1**.
+A small gallery of **real-device-tested Shortcuts for iOS 17.3.1**, built from the user's original exports. All releases rely on **a-Shell mini** and FFmpeg. The GitHub Actions workflow uses the public Shortcuty signing API (no Apple account or paid API key).
 
-## Shortcuts
+## ✅ Three validated releases
 
-| Name | Purpose |
-| ---- | ------- |
-| 🎙️ **Voice → Status** | Convert shared audio to an optimized vertical MP4 with an animated waveform, AAC audio, automatic cleanup and a-Shell mini callback. |
-| ⚡ **Speed Video** | Speed up H.264/HEVC clips at **1.1× / 1.2× / 1.3× / 1.4× / 1.5×** with packet timestamp adjustment and audio tempo correction. |
+| Shortcut | iOS 17.3.1 acceptance | Main function |
+|---|---|---|
+| [🎙️ Voice → Status](./shortcuts/%F0%9F%8E%99%EF%B8%8F%20Voice%20%E2%86%92%20Status.shortcut) | **User tested** | Makes a WhatsApp-ready vertical MP4 with waveform from audio. |
+| [⚡ Speed Video](./shortcuts/%E2%9A%A1%20Speed%20Video.shortcut) | **User tested** | Fast video packet-copy acceleration at 1.1×–1.5× for regular compatible source audio. |
+| [⚡ Speed Video Universal v4](./shortcuts/%E2%9A%A1%20Speed%20Video%20Universal%20v4.shortcut) | **User tested** | Uses iOS native audio extraction to avoid a-Shell's xHE-AAC/USAC decoder bug and preserves original video packets. |
 
-Both are generated using action types harvested from the author's existing **iOS 17.3.1** exports. No speculative new iOS 18+ Shortcut actions are used. They use `a-Shell mini` and its bundled FFmpeg.
+The matching three verified signed files are the *only three shortcuts* in the user's Google Drive `iOS-Shortcuts-Lab` release folder. Earlier failing files, diagnostic folders and donor duplicates were removed from Drive after their source code and donor exports were preserved here in Git history.
 
-## Install-ready gallery (device acceptance pending)
+## 🧪 Experimental, not a replacement
 
-Latest signed `.shortcut` files are published automatically into [`shortcuts/`](./shortcuts) whenever the build passes all checks. Both are generated from genuine iOS 17.3.1 originals and re-signed via Shortcuty, without paid accounts.
+[⚡ Speed Video Smart Test — v5 prototype](./shortcuts/experimental/%E2%9A%A1%20Speed%20Video%20Smart%20Test.shortcut) lives under `shortcuts/experimental/` **only**, not in the three-file release folder. It attempts the traditional FFmpeg-only fast path, then automatically calls itself with `FALLBACK_<speed>` and uses native iOS audio decoding to retry through v4 if the direct FFmpeg process fails.
 
-- [🎙️ Voice → Status](./shortcuts/%F0%9F%8E%99%EF%B8%8F%20Voice%20%E2%86%92%20Status.shortcut) — audio as portrait video with animated waveform.
-- [⚡ Speed Video](./shortcuts/%E2%9A%A1%20Speed%20Video.shortcut) — finely adjusted speed presets.
+This includes the original codec handling and all five speed choices but **needs a physical iOS 17.3.1 test before promotion**, specifically to prove an a-Shell FFmpeg assertion allows the fallback callback and that Shortcuts' Get File → Encode Media pipeline recognizes the retrieved movie. If the test passes, the Smart version can replace traditional **⚡ Speed Video**, keeping three release files overall. See [v5 test plan](./docs/speed-video-smart-v5.md).
 
-**Install:** open a file from the `shortcuts/` directory, choose **Download raw file** if GitHub previews it, transfer to the iPhone (Files/AirDrop), and open with Apple Shortcuts. Keep the two existing working shortcuts installed until the new versions pass real iOS 17.3.1 runtime testing.
+**Keep current validated releases installed and unchanged until v5 is proven.** Importing another Shortcut with the same name can add a number (`1`) and break the `FINALIZAR` name-based callback. The beta uses a unique internal name so it can run alongside them.
 
-## ✅ Speed Video Universal v4 — tested successfully on iOS 17.3.1
+## Proven implementation
 
-The user **successfully tested** [⚡ Speed Video Universal v4](./shortcuts/%E2%9A%A1%20Speed%20Video%20Universal%20v4.shortcut) against an Instagram H.264 clip with **xHE-AAC/USAC audio**, which caused an assertion failure in a-Shell mini FFmpeg's AAC decoder. The same v4 also succeeded with ordinary clips that traditional Speed Video handled. At **1.5×**, the problematic ~124s source became **82.67 seconds**, copying video without recompression (`-c:v copy`) and encoding the prepared audio to AAC-LC.
+- Video: `-c:v copy` plus `setts` timestamps; avoids transcoding and generational video loss.
+- Audio: `atempo`, AAC-LC final encode; Universal v4 uses native iOS Encode Media → AIFF first.
+- Accurate iOS 17 native `Encode Media` input needs the **`WFMedia`** field, verified against an on-device-exported original.
+- Speed options: 1.1× / 1.2× / 1.3× / 1.4× / 1.5×.
+- Successful builds save to Photos and delete temporary files via the name-based `FINALIZAR` callback. Failures may leave residue to aid debugging; a later successful run cleans it.
+- **Not fully universal:** video AV1 and silent videos are not yet validated; some container compatibility varies. AIFF extraction adds temporary disk space and preprocessing time.
 
-**How it works:** native iOS 17 Encode Media extracts source audio to AIFF, then a-Shell FFmpeg opens the original video with `-analyzeduration 0 -probesize 32 -an` (avoiding the buggy USAC audio stream) and joins its unchanged video stream to sped-up AIFF audio. The native action input field `WFMedia` is regression-tested against the user's genuine iOS 17 export. [Diagnosis and on-device acceptance](../../issues/1).
+## Reproducible build and signing
 
-**Limits:** success is confirmed for the specific USAC/H.264 clip and several ordinary videos; do not infer compatibility with every codec or container (especially AV1). V4 requires a source audio track and uses extra temporary storage and native conversion work; the traditional **⚡ Speed Video** remains the simpler option for compatible clips. Production originals are unchanged.
+GitHub Actions processes: **signed donor → macOS AEA1 extraction → binary plist action construction → Shortcuty public signing API → AEA1 integrity check → signed .shortcut**.
 
+[Universal v4 accepted build](../../actions/runs/38506099255) · [Smart v5 experimental workflow](../../actions/workflows/build-speed-smart-v5.yml) · [xHE-AAC investigation (closed)](../../issues/1).
 
-## Automatic reproducible build and signing
+Sources and old references stay in `scripts/`, `donors/`, Git history and `docs/`; failed signed binaries are no longer promoted as gallery releases.
 
-**Donors → extract AEA1 → modify bplist → Shortcuty signing API → verify AEA1 → GitHub Actions artifact**.
-
-Our build workflow uses an Apple-hosted compatible macOS runner to *extract* the donor originals; it calls [Shortcuty's **public official signing API**](https://github.com/Shortcuty/Signing-Server-API-Documentation) to sign the newly generated shortcuts. The API is documented as requiring **no API key** and no RoutineHub subscription:
-
-`POST https://sign.shortcuty.app/api/v1/sign`, `multipart/form-data` with a field named `file`.
-
-The signed output is checked by Apple's `aea` unpacking utility, and the resulting workflow actions are compared with the exact ones we submitted, including the minimum client version. **This confirms content integrity, not on-device feature/codec compatibility**.
-
-To get the latest files, open [GitHub Actions](../../actions/workflows/sign-smoke-test.yml), choose the successful `Build and sign iOS 17 Shortcuts (Shortcuty)` run, and download the signed ZIP artifact. Extract it, move the two `.shortcut` files to the iPhone, open them in Apple Shortcuts, and test on **iOS 17.3.1**.
-
-## Important boundaries
-
-- The source donor exports are signed and are kept unchanged for reference.
-- Never publish Apple account credentials, keychain dumps, application passwords, tokens, or private shortcuts.
-- A public signing provider can read a submitted shortcut. Audit any workflow before sending it to a third party.
-- The current signing API is public but its uptime and rate limits are controlled by Shortcuty.
-- Final iOS 17.3.1 import and a-Shell mini execution tests must be done on the user's physical phone. Successful signing alone does not prove the callback/audio/video workflow on-device.
-
-## Previous findings
-
-RoutineHub's **membership-only HubSign API** requires a dedicated key and plan. An older public HubSign endpoint no longer produced usable signed files in our October 2026 test. Gluebyte's older `shortcuts.gluebyte.workers.dev` signing endpoint explicitly says it is offline and points to an updated Shortcut Source Helper (version 3.0, released 2026-09-15) that uses Shortcuty.
+**Security:** never publish Apple IDs, passwords, keychain data or personal files inside Shortcuts. A third-party signing server can inspect workflow contents. A successful signature/content-diff is *not* equivalent to a successful iPhone runtime test.
