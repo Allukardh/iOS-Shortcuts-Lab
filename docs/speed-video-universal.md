@@ -1,45 +1,32 @@
-# ⚡ Speed Video Universal — experimental iOS 17.3.1 build
+# ⚡ Speed Video Universal v4 — validated on iOS 17.3.1
 
-**Install next to your existing ⚡ Speed Video. Do not replace the proven version.**
+**User-tested successful** with the problematic Instagram H.264 + xHE-AAC/USAC source and with ordinary videos previously processed by Speed Video.
 
-This is a separately named Shortcuts variant for Instagram downloads or other
-videos whose audio fails inside the FFmpeg AAC/USAC decoder.
+## Why v4 exists
 
-## iOS 17.3.1 test status (v2, 2026-10-13)
+The a-Shell mini FFmpeg AAC decoder aborts on some xHE-AAC/USAC inputs (`aacdec_usac.c:1646`). Native iOS 17.3.1 **Encode Media** can decode this clip's xHE-AAC to a 123.994558-second, approximately 21 MiB AIFF file. Initial Universal v1–v3 attempts were broken in part because the generated Encode Media action had `WFInput` but was missing its true `WFMedia` input parameter. The correct parameter and serialization were obtained by comparing an **iOS 17.3.1-exported, manually edited .shortcut** with the generated one. See [issue #1](../issues/1).
 
-First Universal and Audio Test builds returned no AIFF output even for ordinary camera video. This rules out xHE-AAC as the *sole* cause of the absent output. Version 2 replaces the speculative `WFAVAssetContentItem` coercion with the exact proven `ExtensionInput` token from the donor and removes the explicit `ActionOutput` reference containing the hardcoded English `OutputName="Encoded Media"`. The Rename action now receives the previous action's output implicitly, following native Shortcuts data-flow convention.
+## v4 pipeline
 
-Signed and validated on macOS GitHub Actions; **not yet validated on iOS**. To test, delete only the old malfunctioning `⚡ Speed Video Universal` before importing v2, otherwise iOS might auto-rename to `⚡ Speed Video Universal 1` and the callback will not locate it. This is an experimental targeted repair, not proof that iOS can decode every codec.
+1. Receive a video from the iOS Share Sheet.
+2. Native `Encode Media → Audio Only → AIFF` extracts/decodes audio **before** calling a-Shell mini. Uses iOS-proven `WFMedia = ExtensionInput`.
+3. Copy AIFF and original source video to a-Shell mini using separate, named files.
+4. Offer five presets: 1.1×, 1.2×, 1.3×, 1.4×, 1.5×.
+5. FFmpeg opens the original video with **`-analyzeduration 0 -probesize 32 -an`**, copies only video packets with **`-c:v copy`**, retimes using `setts`; takes audio solely from AIFF, speeds it with `atempo`, outputs AAC ~192 kbps.
+6. Save resulting MP4 to Photos with the original proven `FINALIZAR` callback and clean temporary files on success. Failed conversions may leave temporaries until the next successful run.
 
-## Pipeline
+## Device acceptance, 2026-10-14
 
-1. Shared video is copied unchanged into a-Shell mini.
-2. The native iOS **Encode Media → Audio Only → AIFF** action extracts and
-   decodes audio into uncompressed, lossless PCM AIFF using Apple media APIs.
-   iOS itself must support the source codec; xHE-AAC is the main test target.
-3. The AIFF is copied to a-Shell mini.
-4. The existing fine-control menu offers 1.1×, 1.2×, 1.3×, 1.4×, 1.5×.
-5. FFmpeg remuxes original H.264/HEVC/AV1 video packets with `-c:v copy`,
-   retimes video timestamps with `setts`, and speeds the AIFF with `atempo`.
-   Only the final output audio is encoded to AAC (192 kb/s).
-6. Saves output via the original silent `FINALIZAR` callback, then cleans
-   `__universal_entrada`, `__universal_audio.aiff`, `__universal.mp4`.
+- Tested on physical iOS 17.3.1 with a-Shell mini.
+- Source: ~124s, H.264 High 720×1280 30fps, xHE-AAC/USAC stereo 44.1kHz.
+- Output: **H.264 High 720×1280 30fps, AAC-LC stereo 44.1 kHz, duration 00:01:22.67 at 1.5×**.
+- Terminal: `frame=3724`, `q=-1.0`, `Lsize=121167KiB`, `speed=36.4x`. No USAC assertion in successful run.
+- User also verified regular compatible videos work on v4.
 
-## Compatibility limits
+## Limitations
 
-- Donor: user's signed iOS **17.3.1** Speed Video (all original callback,
-  share-sheet, camera-roll, and a-Shell intent structures preserved).
-- One extra **Encode Media** action (built into iOS 17) plus original donor
-  **Rename File** and **Put File** action types.
-- Native AVFoundation must support decoding the source audio. AV1 video
-  copied to MP4 must be accepted by the iPhone's Photos library.
-- The tool is experimental until **the exact problem video is tested
-  on the phone**. A signed file and syntactically valid actions are not
-  proof that iOS audio export and callback will succeed.
-- A **video without audio** will fail at the native audio-only export;
-  keep the standard Speed Video for silent videos.
-- No login, subscription, jailbreak trick, or unsupported iOS 18 feature.
-
-Source: `scripts/build_speed_universal.py`.
-The build workflow touches only the new `shortcuts/⚡ Speed Video Universal.shortcut`
-file and leaves `⚡ Speed Video` and `🎙️ Voice → Status` unchanged.
+- Compatibility with AV1 video, all media containers and videos without audio remains unverified.
+- Native audio extraction and AIFF may increase total processing time and temporary disk usage relative to traditional Speed Video.
+- The original `⚡ Speed Video` and `🎙️ Voice → Status` remain preserved and functional.
+- Signed .shortcut: [Speed Video Universal v4](../shortcuts/%E2%9A%A1%20Speed%20Video%20Universal%20v4.shortcut).
+- Source: `scripts/build_universal_v4.py`; signed and source-verified in [GitHub Actions](https://github.com/Allukardh/iOS-Shortcuts-Lab/actions/runs/38506099255).
