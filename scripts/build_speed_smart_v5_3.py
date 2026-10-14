@@ -91,7 +91,7 @@ def construct(donor, ios):
         safe=core[9]["WFWorkflowActionParameters"]["command"]
         for c in (direct,safe):
             assert f'atempo={rate}' in c and "&& open " in c
-            assert NAME.replace(" ","%20") in c
+            assert "name="+m.callback("FINALIZAR").split("name=")[1].split("&")[0] in c
         res.extend([item,preflight,*core])
 
     res.append(menu_end)
