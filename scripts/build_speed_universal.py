@@ -6,7 +6,9 @@ The new shortcut asks native Encode Media to export audio-only AIFF (lossless),
 then a-Shell FFmpeg only copies/re-times the *original video* and processes
 the normalized uncompressed audio (atempo, single final AAC encode).
 
-This handles xHE-AAC/USAC provided the user's iOS AVFoundation can decode it.
+This handles xHE-AAC/USAC only if native iOS Encode Media can decode it.
+The initial version's manually forged action outputs failed even on camera videos;
+this revision uses an unmodified ExtensionInput token and implicit output wiring.
 For AV1 videos, MP4 remuxing and Photos import still require device validation.
 """
 from __future__ import annotations
@@ -59,11 +61,11 @@ def create(donor: dict) -> dict:
     # Give the native media decoder the original shared file, NOT the output
     # of the preceding a-Shell upload action (which is not a media object).
     encode_id = uid()
+    # Pass the exact Share Sheet token known to work in the donor.
+    # The earlier custom coercion was unverified and produced no Quick Look
+    # output even for an ordinary iPhone-camera video.
     wf_input = copy.deepcopy(original[7]["WFWorkflowActionParameters"]["WFInput"])
-    wf_input["Value"]["Aggrandizements"] = [{
-        "Type": "WFCoercionVariableAggrandizement",
-        "CoercionItemClass": "WFAVAssetContentItem"
-    }]
+    assert wf_input["Value"]["Type"] == "ExtensionInput"
     native_audio = action("is.workflow.actions.encodemedia", {
         "WFInput": wf_input,
         "UUID": encode_id,
@@ -77,7 +79,9 @@ def create(donor: dict) -> dict:
     rename_audio = action("is.workflow.actions.setitemname", {
         "WFName": AUDIO,
         "WFDontIncludeFileExtension": False,
-        "WFInput": output_ref(encode_id, "Encoded Media"),
+        # No WFInput intentionally: Shortcuts automatically passes the
+        # immediately preceding Encode Media result to Rename. This avoids
+        # a speculative, possibly mislocalized OutputName string.
         "UUID": named_audio_id,
     })
     put_audio = action("AsheKube.app.a-Shell-mini.PutFileIntent", {
@@ -89,6 +93,9 @@ def create(donor: dict) -> dict:
     menu = copy.deepcopy(original[9])
     menu["WFWorkflowActionParameters"]["WFMenuItems"] = [f"{x}×" for x in FR]
     flow = common + [native_audio, rename_audio, put_audio, menu]
+    assert native_audio["WFWorkflowActionParameters"]["WFInput"] == original[7]["WFWorkflowActionParameters"]["WFInput"]
+    assert "WFInput" not in rename_audio["WFWorkflowActionParameters"]
+    assert put_audio["WFWorkflowActionParameters"]["file"]["Value"]["OutputUUID"] == named_audio_id
 
     for rate in FR:
         branch = copy.deepcopy(original[10])
