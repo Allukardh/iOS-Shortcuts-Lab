@@ -13,6 +13,7 @@ The original published shortcuts and previous Universal variants are untouched.
 """
 from __future__ import annotations
 import argparse
+import copy
 import importlib.util
 import plistlib
 from pathlib import Path
@@ -62,6 +63,12 @@ def main() -> None:
     # ShareSheet token is the same proven token used by original
     # Set Item Name. No a-Shell context switch occurs beforehand.
     assert native["WFInput"]==donor["WFWorkflowActions"][7]["WFWorkflowActionParameters"]["WFInput"]
+    # Crucial iOS 17.3.1 finding: the native Encode Media action consumes
+    # WFMedia, not merely WFInput. The first 3 variants omitted WFMedia,
+    # so Encode Media displayed a generic unbound 'Mídia' placeholder.
+    # The real on-device edit/export supplied this exact property.
+    native["WFMedia"] = copy.deepcopy(native["WFInput"])
+    assert native["WFMedia"]["Value"]["Type"] == "ExtensionInput"
     # Explicit magic variable: Never rely on implicit previous action input.
     # CustomOutputName mirrors OutputName to keep binding deterministic.
     named=audio_transfer[1]["WFWorkflowActionParameters"]
@@ -88,7 +95,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_bytes(raw)
     print(f"Built {NAME}: {len(result['WFWorkflowActions'])} actions, native audio decoding BEFORE a-Shell")
-    print("Explicit CustomOutputName: Converted Audio; Rename input references native encoder UUID")
+    print("iOS-verified WFMedia token: ExtensionInput; explicit Converted Audio output -> Rename")
     print("Preserved original input/callback, protected original published releases")
 
 
