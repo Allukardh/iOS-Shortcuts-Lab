@@ -25,6 +25,25 @@ jobs:
           python3 scripts/build_universal_v3.py --donor build/donor/Shortcut.wflow \
             --output build/unsigned/universal-v3.wflow
 
+      - name: Regression test against real iOS 17.3.1 media input
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/extract_signed.py 'donors/Speed-Universal-v3.iOS17-edited.shortcut' build/ios-reference
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+          generated=plistlib.loads(Path('build/unsigned/universal-v3.wflow').read_bytes())
+          native=plistlib.loads(Path('build/ios-reference/Shortcut.wflow').read_bytes())
+          def encoder(p):
+              return next(a['WFWorkflowActionParameters'] for a in p['WFWorkflowActions']
+                          if a['WFWorkflowActionIdentifier']=='is.workflow.actions.encodemedia')
+          a,b=encoder(generated),encoder(native)
+          for key in ['WFMedia','WFInput','WFMediaAudioOnly','WFMediaAudioFormat','WFMediaSpeed']:
+              assert a.get(key)==b.get(key),(key,a.get(key),b.get(key))
+          print('PASS: media input matches actual iOS 17.3.1 exported Encode Media')
+          PY
+
       - name: Sign with public Shortcuty service
         run: |
           python3 scripts/sign_shortcuty.py --input build/unsigned/universal-v3.wflow \
