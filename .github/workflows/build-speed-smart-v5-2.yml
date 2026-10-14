@@ -1,0 +1,81 @@
+name: Build Smart Speed v5.2 with iOS-native branching
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build_speed_smart_v5_2.py"
+      - ".github/workflows/build-speed-smart-v5-2.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract proven iOS 17 donors
+        run: |
+          python3 scripts/extract_signed.py donors/Speed-Video.original.shortcut build/orig
+          python3 scripts/extract_signed.py donors/Speed-Universal-v3.iOS17-edited.shortcut build/ios
+
+      - name: Generate preflight and native branch variant
+        run: |
+          python3 scripts/build_speed_smart_v5_2.py \
+            --donor build/orig/Shortcut.wflow \
+            --ios-ref build/ios/Shortcut.wflow \
+            --output build/unsigned/smart-5-2.wflow
+
+      - name: Verify branch graph
+        run: |
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+          arr=plistlib.loads(Path('build/unsigned/smart-5-2.wflow').read_bytes())['WFWorkflowActions']
+          cmds=[a['WFWorkflowActionParameters'].get('command','') for a in arr]
+          assert sum('ffprobe ' in a for a in cmds)==5
+          assert sum('ffmpeg ' in a for a in cmds)==10
+          assert sum(a['WFWorkflowActionIdentifier']=='is.workflow.actions.detect.text' for a in arr)==5
+          print('PASS: iOS-native conditionals, no shell conditionals')
+          PY
+
+      - name: Sign with Shortcuty
+        run: |
+          python3 scripts/sign_shortcuty.py \
+            --input build/unsigned/smart-5-2.wflow \
+            --upload-filename '⚡ Speed Video Smart v5.2.shortcut' \
+            --output 'build/signed/⚡ Speed Video Smart v5.2.shortcut'
+
+      - name: AEA1 binary round-trip verification
+        run: |
+          python3 scripts/extract_signed.py 'build/signed/⚡ Speed Video Smart v5.2.shortcut' build/signed-extract
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+          a=plistlib.loads(Path('build/unsigned/smart-5-2.wflow').read_bytes())
+          b=plistlib.loads(Path('build/signed-extract/Shortcut.wflow').read_bytes())
+          assert a['WFWorkflowActions']==b['WFWorkflowActions']
+          print('PASS: signed output matches source')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speed-video-smart-v5-2-unsigned-logic-tested-signed
+          path: build/signed/*.shortcut
+          if-no-files-found: error
+
+      - name: Publish experimental file only
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p shortcuts/experimental
+          cp 'build/signed/⚡ Speed Video Smart v5.2.shortcut' 'shortcuts/experimental/⚡ Speed Video Smart v5.2.shortcut'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'shortcuts/experimental/⚡ Speed Video Smart v5.2.shortcut'
+          git commit -m 'dist: Smart v5.2 native branch candidate [skip ci]'
+          git push origin HEAD:main
