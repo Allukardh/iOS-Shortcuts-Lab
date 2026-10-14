@@ -1,172 +1,137 @@
 #!/usr/bin/env python3
-"""Speed Video Smart v5.3: one foreground a-Shell launch (experimental).
+"""Smart v5.3: one visible a-Shell visit via a forced offscreen ffprobe preflight.
 
-Based on the physically functioning Smart v5.2 iOS if-then branch graph,
-with ffprobe moved into a-Shell's Intent Extension (openWindow=close).
-a-Shell's upstream Swift ExecuteCommandIntentHandler explicitly says the
-extension runs fast commands directly through ios_system in the shared app
-group and returns to Shortcuts without opening the UI.  The ffprobe command
-is a short read-only profile scan: it must fit the extension's ~5s limit.
+This is a precise, separately named experiment based on the proven v5.2
+logic. Do not replace stable v4 / v5.2 until on-device verification.
 
-After native GetFile -> Get Text -> If, only the chosen *conversion* path
-launches a-Shell: direct FFmpeg for AAC-LC, native iOS audio-first + FFmpeg
-for other profiles. No shell if/fi, OR chains, or repeated self-callbacks.
-The proven legacy shortcuts are untouched.
+a-Shell mini's ExecuteCommandIntentHandler.swift: intent.openWindow == .close
+runs executeCommandInExtension in shared app-group directory. Unlike 'auto',
+forcing 'close' bypasses the localCommands whitelist (which excludes ffprobe).
+However, successful execution of the ffprobe binary and extension runtime
+limits STILL require a physical iOS 17.3.1 test.
 """
 from __future__ import annotations
+
 import argparse
 import copy
 import importlib.util
 import plistlib
 from pathlib import Path
 
-BASE=Path(__file__).with_name("build_speed_smart_v5_2.py")
-NAME="⚡ Speed Video Smart v5.3"
+NAME = "⚡ Speed Video Smart v5.3"
 
-def load_base():
-    spec=importlib.util.spec_from_file_location("smart_v52",BASE)
+
+def construct(donor, ios):
+    module_path = Path(__file__).with_name("build_speed_smart_v5_2.py")
+    spec=importlib.util.spec_from_file_location("v52",module_path)
     assert spec and spec.loader
     m=importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     m.NAME=NAME
-    return m
+    original=m.build(donor,ios)
+    actions=original["WFWorkflowActions"]
+    src=donor["WFWorkflowActions"]
+    assert len(actions)==96, f"Unexpected original action count: {len(actions)}"
+    assert len(src)==15
 
-def build(donor:dict, ios:dict)->dict:
-    m=load_base()
-    base=donor["WFWorkflowActions"]
-    assert len(base)==15
-    encoder=next(x for x in ios["WFWorkflowActions"]
-                 if x["WFWorkflowActionIdentifier"]=="is.workflow.actions.encodemedia")
-    assert encoder["WFWorkflowActionParameters"]["WFMedia"]["Value"]["Type"]=="ExtensionInput"
-    assert base[1]["WFWorkflowActionIdentifier"]==m.GET
-    assert base[7]["WFWorkflowActionIdentifier"]=="is.workflow.actions.setitemname"
-    assert base[8]["WFWorkflowActionIdentifier"]==m.PUT
-    assert base[11]["WFWorkflowActionIdentifier"]==m.EXEC
-    result=copy.deepcopy(donor)
+    # Original v5.2 sections: 7 FINALIZAR actions; 5 complete 15-action
+    # PROBE callback handlers; 2 source upload; 1 menu head;
+    # 5x menu item + ffprobe/open callback; final menu close.
+    callback=copy.deepcopy(actions[:7])
+    blocks=[copy.deepcopy(actions[7+15*i:7+15*(i+1)]) for i in range(5)]
+    shared_input=copy.deepcopy(actions[82:84])
+    menu_start=copy.deepcopy(actions[84])
+    menu_end=copy.deepcopy(actions[95])
+    assert all(len(b)==15 for b in blocks)
+    assert actions[82]["WFWorkflowActionIdentifier"]=="is.workflow.actions.setitemname"
+    assert actions[83]["WFWorkflowActionIdentifier"]==m.PUT
+    assert menu_start["WFWorkflowActionIdentifier"]=="is.workflow.actions.choosefrommenu"
+    assert menu_end["WFWorkflowActionIdentifier"]=="is.workflow.actions.choosefrommenu"
+    assert menu_end["WFWorkflowActionParameters"]["WFControlFlowMode"]==2
 
-    # Preserve physically validated success callback: Get MP4 -> Save Photos ->
-    # remove temporary files -> Stop Shortcut.
-    steps=copy.deepcopy(base[:7])
-    steps[1]["WFWorkflowActionParameters"]["fileName"]=m.OUTPUT
-    steps[3]["WFWorkflowActionParameters"]["command"]=(f'rm -f "{m.SOURCE}" '
-                                                      f'"{m.REPORT}" "{m.AUDIO}" "{m.OUTPUT}"')
+    res=callback+shared_input+[menu_start]
 
-    # Save source into a-Shell's shared directory once (not an app launch).
-    putname=copy.deepcopy(base[7])
-    putname["WFWorkflowActionParameters"].update(WFName=m.SOURCE,WFDontIncludeFileExtension=False)
-    put=copy.deepcopy(base[8])
-    put["WFWorkflowActionParameters"]["overwrite"]=True
-    steps.extend((putname,put))
+    for i,rate in enumerate(m.SPEEDS):
+        block=blocks[i]
+        identifiers=[b["WFWorkflowActionIdentifier"] for b in block]
+        expected=[m.COND,m.GET,"is.workflow.actions.detect.text",m.COND,
+                  m.EXEC,m.COND,m.GET,"is.workflow.actions.encodemedia",
+                  "is.workflow.actions.setitemname",m.PUT,m.EXEC,m.COND,
+                  "is.workflow.actions.stop",m.COND,m.COND]
+        assert identifiers==expected, (rate,identifiers)
+        # Use already verified v5.2 branch graph, but move it directly
+        # underneath the matching menu option. Remove PROBE_x callback
+        # wrapper: a-Shell will NOT open the app to call that shortcut again.
+        # Execute probe in extension, then native Get File -> Text -> If.
+        item=copy.deepcopy(actions[85+2*i])
+        assert item["WFWorkflowActionIdentifier"]=="is.workflow.actions.choosefrommenu"
+        assert item["WFWorkflowActionParameters"]["WFMenuItemTitle"]==rate+"×"
 
-    menu=copy.deepcopy(base[9])
-    menu["WFWorkflowActionParameters"]["WFMenuItems"]=[x+"×" for x in m.SPEEDS]
-    steps.append(menu)
+        preflight=copy.deepcopy(actions[86+2*i])
+        assert preflight["WFWorkflowActionIdentifier"]==m.EXEC
+        p=preflight["WFWorkflowActionParameters"]
+        command=f'ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,profile -of default=noprint_wrappers=1 "{m.SOURCE}" > "{m.REPORT}"'
+        # IMPORTANT: no "sh -c", no shell 'if', no callback URL. In extension
+        # ios_system executes the simple command and redirects its output.
+        p["command"]=command
+        p["openWindow"]="close"   # a-Shell documented .close = in-extension
+        p["ShowWhenRun"]=False
+        p["keepGoing"]=False
 
-    for speed in m.SPEEDS:
-        option=copy.deepcopy(base[10])
-        option["WFWorkflowActionParameters"]["WFMenuItemTitle"]=speed+"×"
-        steps.append(option)
+        core=[copy.deepcopy(a) for a in block[1:12]]
+        # core: get-report, detect-text, if, direct exec, else,
+        # get-movie, encode-media, rename, put, universal exec, end-if
+        assert len(core)==11
+        cond=core[2]["WFWorkflowActionParameters"]
+        assert cond["WFCondition"]==99 and cond["WFConditionalActionString"]=="profile=LC"
+        enc=core[6]["WFWorkflowActionParameters"]
+        assert enc["WFMediaAudioOnly"] is True and enc["WFMediaAudioFormat"]=="AIFF"
+        assert enc["WFMedia"]["Value"]["Type"]=="ActionOutput"
+        direct=core[3]["WFWorkflowActionParameters"]["command"]
+        safe=core[9]["WFWorkflowActionParameters"]["command"]
+        for c in (direct,safe):
+            assert f'atempo={rate}' in c and "&& open " in c
+            assert NAME.replace(" ","%20") in c
+        res.extend([item,preflight,*core])
 
-        # The critical change from v5.2: force the lightweight command into
-        # the a-Shell mini Intent Extension. The Swift handler's .close mode
-        # explicitly avoids launching the app, even though ffprobe is not
-        # listed among its auto-selected "localCommands".
-        # No sh -c, no open callback, just plain ffprobe output to a text file.
-        preflight=(f'ffprobe -v error -select_streams a:0 '
-                   f'-show_entries stream=codec_name,profile '
-                   f'-of default=noprint_wrappers=1 "{m.SOURCE}" > "{m.REPORT}"')
-        check=copy.deepcopy(base[11])
-        check["WFWorkflowActionParameters"].update(
-            command=preflight,
-            openWindow="close",
-            ShowWhenRun=False,
-            UUID=m.uid(),
-            keepGoing=False,
-        )
-        steps.append(check)
+    res.append(menu_end)
+    original["WFWorkflowActions"]=res
 
-        report=copy.deepcopy(base[1])
-        report_id=m.uid()
-        report["WFWorkflowActionParameters"].update(fileName=m.REPORT,UUID=report_id)
-        steps.append(report)
-
-        text_id=m.uid()
-        extract=m.a("is.workflow.actions.detect.text",{
-            "WFInput":m.reference(report_id,"Arquivo"),
-            "UUID":text_id
-        })
-        steps.append(extract)
-
-        condition,group=m.if_action(m.reference(text_id,"Text"),contains="profile=LC")
-        steps.append(condition)
-        steps.append(m.execution(m.direct(speed),base[11]))
-
-        steps.append(m.marker(group,1))
-        # Unlike v5.2, no Get original video from a-Shell is required. The
-        # Share Sheet ExtensionInput still exists in the same Shortcut run;
-        # use the real iOS-exported native parameter from the validated v4.
-        enc=copy.deepcopy(encoder)
-        p=enc["WFWorkflowActionParameters"]
-        enc_id=m.uid()
-        p["UUID"]=enc_id
-        p["WFMedia"]=copy.deepcopy(base[7]["WFWorkflowActionParameters"]["WFInput"])
-        p["WFInput"]=copy.deepcopy(p["WFMedia"])
-        p.update(CustomOutputName="Converted Audio",WFMediaAudioOnly=True,
-                 WFMediaAudioFormat="AIFF",WFMediaSpeed="Normal",Metadata=False)
-        assert p["WFMedia"]["Value"]["Type"]=="ExtensionInput"
-        steps.append(enc)
-
-        name_id=m.uid()
-        rename=m.a("is.workflow.actions.setitemname",{
-            "WFName":m.AUDIO,
-            "WFInput":m.reference(enc_id,"Converted Audio"),
-            "WFDontIncludeFileExtension":False,"UUID":name_id,
-        })
-        steps.append(rename)
-        upload=copy.deepcopy(base[8])
-        upload["WFWorkflowActionParameters"].update(
-            file=m.reference(name_id,"Item Renomeado"),overwrite=True,UUID=m.uid()
-        )
-        steps.append(upload)
-        steps.append(m.execution(m.universal(speed),base[11]))
-        steps.append(m.marker(group,2))
-
-    steps.append(copy.deepcopy(base[14]))
-    result["WFWorkflowActions"]=steps
-    # Guard against silent workflow creation regressions.
-    cond_open=[x["WFWorkflowActionParameters"]["GroupingIdentifier"] for x in steps
-               if x["WFWorkflowActionIdentifier"]==m.COND
-               and x["WFWorkflowActionParameters"].get("WFControlFlowMode")==0]
-    cond_close=[x["WFWorkflowActionParameters"]["GroupingIdentifier"] for x in steps
-                if x["WFWorkflowActionIdentifier"]==m.COND
-                and x["WFWorkflowActionParameters"].get("WFControlFlowMode")==2]
-    assert sorted(cond_open)==sorted(cond_close) and len(cond_open)==6
-    total_probes=[x for x in steps if x["WFWorkflowActionIdentifier"]==m.EXEC
-                  and "ffprobe " in x["WFWorkflowActionParameters"].get("command","")]
-    assert len(total_probes)==5
-    assert all(x["WFWorkflowActionParameters"]["openWindow"]=="close" for x in total_probes)
-    assert all("open \"shortcuts:" not in x["WFWorkflowActionParameters"]["command"] for x in total_probes)
-    assert all(not x["WFWorkflowActionParameters"]["command"].startswith("sh -c") for x in total_probes)
-    ffmpeg=[x for x in steps if x["WFWorkflowActionIdentifier"]==m.EXEC
-            and "ffmpeg " in x["WFWorkflowActionParameters"].get("command","")]
-    assert len(ffmpeg)==10
-    assert all(x["WFWorkflowActionParameters"]["openWindow"]=="open" for x in ffmpeg)
-    assert not any("if ffmpeg" in x["WFWorkflowActionParameters"]["command"] or " || " in x["WFWorkflowActionParameters"]["command"] for x in steps if x["WFWorkflowActionIdentifier"]==m.EXEC)
-    assert len([x for x in steps if x["WFWorkflowActionIdentifier"]=="is.workflow.actions.encodemedia"])==5
-    assert result["WFWorkflowMinimumClientVersion"]==donor["WFWorkflowMinimumClientVersion"]
-    ids=[x["WFWorkflowActionParameters"].get("UUID") for x in steps]
-    ids=[i for i in ids if i]
+    assert len(res)==76,len(res)
+    assert len([a for a in res if a["WFWorkflowActionIdentifier"]==m.EXEC
+                and "ffprobe " in a["WFWorkflowActionParameters"].get("command","")])==5
+    probe_actions=[a for a in res if a["WFWorkflowActionIdentifier"]==m.EXEC
+                   and "ffprobe " in a["WFWorkflowActionParameters"].get("command","")]
+    assert all(a["WFWorkflowActionParameters"]["openWindow"]=="close" for a in probe_actions)
+    assert all("open " not in a["WFWorkflowActionParameters"]["command"] for a in probe_actions)
+    assert len([a for a in res if a["WFWorkflowActionIdentifier"]==m.EXEC and
+                "ffmpeg " in a["WFWorkflowActionParameters"].get("command","")])==10
+    groups_open=[a["WFWorkflowActionParameters"]["GroupingIdentifier"] for a in res
+                 if a["WFWorkflowActionIdentifier"]==m.COND and
+                 a["WFWorkflowActionParameters"]["WFControlFlowMode"]==0]
+    groups_close=[a["WFWorkflowActionParameters"]["GroupingIdentifier"] for a in res
+                  if a["WFWorkflowActionIdentifier"]==m.COND and
+                  a["WFWorkflowActionParameters"]["WFControlFlowMode"]==2]
+    assert sorted(groups_open)==sorted(groups_close) and len(groups_open)==6
+    ids=[a.get("WFWorkflowActionParameters",{}).get("UUID") for a in res]
+    ids=[x for x in ids if x]
     assert len(ids)==len(set(ids))
-    assert len(steps)==71, len(steps)
-    print(f"PASS: {len(steps)} actions, five foreground-free ffprobe preflights, five direct & five native fallback FFmpeg jobs.")
-    return result
+    assert original["WFWorkflowMinimumClientVersion"]==donor["WFWorkflowMinimumClientVersion"]
+    print("PASS: 76 actions, 5 offscreen extension probes, five fast and five iOS audio branches")
+    return original
 
-if __name__=="__main__":
-    ap=argparse.ArgumentParser()
-    ap.add_argument("--donor",required=True,type=Path)
-    ap.add_argument("--ios-ref",required=True,type=Path)
-    ap.add_argument("--output",required=True,type=Path)
-    args=ap.parse_args()
-    p=build(plistlib.loads(args.donor.read_bytes()),plistlib.loads(args.ios_ref.read_bytes()))
-    args.output.parent.mkdir(parents=True,exist_ok=True)
-    args.output.write_bytes(plistlib.dumps(p,fmt=plistlib.FMT_BINARY,sort_keys=False))
+
+def main():
+    args=argparse.ArgumentParser()
+    args.add_argument("--donor",type=Path,required=True)
+    args.add_argument("--ios-ref",type=Path,required=True)
+    args.add_argument("--output",type=Path,required=True)
+    a=args.parse_args()
+    result=construct(plistlib.loads(a.donor.read_bytes()),plistlib.loads(a.ios_ref.read_bytes()))
+    data=plistlib.dumps(result,fmt=plistlib.FMT_BINARY,sort_keys=False)
+    assert plistlib.loads(data)==result
+    a.output.parent.mkdir(parents=True,exist_ok=True)
+    a.output.write_bytes(data)
+    print("Generated",a.output,len(data),"bytes")
+
+if __name__=="__main__":main()

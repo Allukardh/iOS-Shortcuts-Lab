@@ -1,4 +1,4 @@
-name: Build Smart Speed v5.3 with extension preflight
+name: Build Smart v5.3 background codec probe
 
 on:
   workflow_dispatch:
@@ -17,70 +17,55 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Extract real iOS 17.3.1 donor and native Encode Media reference
-        shell: bash
+      - name: Extract working iOS 17.3.1 donors
         run: |
-          python3 scripts/extract_signed.py donors/Speed-Video.original.shortcut build/legacy
-          python3 scripts/extract_signed.py donors/Speed-Universal-v3.iOS17-edited.shortcut build/native
-
-      - name: Build Smart v5.3 one-foreground design
+          python3 scripts/extract_signed.py donors/Speed-Video.original.shortcut build/orig
+          python3 scripts/extract_signed.py donors/Speed-Universal-v3.iOS17-edited.shortcut build/ios
+      - name: Generate shortcut
         run: |
           python3 scripts/build_speed_smart_v5_3.py \
-            --donor build/legacy/Shortcut.wflow \
-            --ios-ref build/native/Shortcut.wflow \
-            --output build/unsigned/smart-v5-3.wflow
-
-      - name: Verify on-device iOS native media parameter and no shell conditions
+            --donor build/orig/Shortcut.wflow \
+            --ios-ref build/ios/Shortcut.wflow \
+            --output build/unsigned/smart-v5.3.wflow
+      - name: Verify offscreen preflight and callback placement
         run: |
           python3 - <<'PY'
-          import plistlib
           from pathlib import Path
-          a=plistlib.loads(Path('build/unsigned/smart-v5-3.wflow').read_bytes())
-          b=plistlib.loads(Path('build/native/Shortcut.wflow').read_bytes())
-          acts=a['WFWorkflowActions']
-          enc=[x['WFWorkflowActionParameters'] for x in acts if x['WFWorkflowActionIdentifier']=='is.workflow.actions.encodemedia']
-          proven=next(x['WFWorkflowActionParameters'] for x in b['WFWorkflowActions'] if x['WFWorkflowActionIdentifier']=='is.workflow.actions.encodemedia')
-          assert len(enc)==5
-          for x in enc:
-              assert x['WFMedia']==proven['WFMedia']
-              assert x['WFMediaAudioOnly']==proven['WFMediaAudioOnly']
-              assert x['WFMediaAudioFormat']==proven['WFMediaAudioFormat']
-          ex=[x['WFWorkflowActionParameters'] for x in acts if x['WFWorkflowActionIdentifier']=='AsheKube.app.a-Shell-mini.ExecuteCommandIntent']
-          p=[x for x in ex if 'ffprobe ' in x.get('command','')]
-          assert len(p)==5 and all(x['openWindow']=='close' for x in p)
-          assert len([x for x in ex if 'ffmpeg ' in x.get('command','')])==10
-          print('PASS: iOS 17 native media and nonlaunching ffprobe intentions')
+          import plistlib
+          obj=plistlib.loads(Path('build/unsigned/smart-v5.3.wflow').read_bytes())
+          acts=obj['WFWorkflowActions']
+          assert len(acts)==76
+          probes=[x['WFWorkflowActionParameters'] for x in acts if 'ffprobe ' in x.get('WFWorkflowActionParameters',{}).get('command','')]
+          ffmpeg=[x['WFWorkflowActionParameters'] for x in acts if 'ffmpeg ' in x.get('WFWorkflowActionParameters',{}).get('command','')]
+          assert len(probes)==5 and len(ffmpeg)==10
+          assert all(p['openWindow']=='close' and 'sh -c' not in p['command'] for p in probes)
+          assert all(p['openWindow']=='open' for p in ffmpeg)
+          print('PASS: probe runs in extension, conversion opens app')
           PY
-
-      - name: Sign with Shortcuty
+      - name: Sign Shortcut with Shortcuty
         run: |
           python3 scripts/sign_shortcuty.py \
-            --input build/unsigned/smart-v5-3.wflow \
+            --input build/unsigned/smart-v5.3.wflow \
             --upload-filename '⚡ Speed Video Smart v5.3.shortcut' \
             --output 'build/signed/⚡ Speed Video Smart v5.3.shortcut'
-
-      - name: Verify signed AEA1 contains exact source
+      - name: Check signed AEA1 round-trip integrity
         run: |
-          python3 scripts/extract_signed.py 'build/signed/⚡ Speed Video Smart v5.3.shortcut' build/signed-extract
+          python3 scripts/extract_signed.py 'build/signed/⚡ Speed Video Smart v5.3.shortcut' build/verified
           python3 - <<'PY'
-          import plistlib
           from pathlib import Path
-          a=plistlib.loads(Path('build/unsigned/smart-v5-3.wflow').read_bytes())
-          b=plistlib.loads(Path('build/signed-extract/Shortcut.wflow').read_bytes())
+          import plistlib
+          a=plistlib.loads(Path('build/unsigned/smart-v5.3.wflow').read_bytes())
+          b=plistlib.loads(Path('build/verified/Shortcut.wflow').read_bytes())
           assert a['WFWorkflowActions']==b['WFWorkflowActions']
-          assert a['WFWorkflowMinimumClientVersion']==b['WFWorkflowMinimumClientVersion']
-          print('PASS: signed action payload is unchanged')
+          print('PASS: signer preserved all 76 action instructions')
           PY
-
       - uses: actions/upload-artifact@v4
         with:
-          name: speed-video-smart-v5-3-extension-preflight-experimental
+          name: smart-speed-v5-3-offscreen-probe-beta
           path: build/signed/*.shortcut
           if-no-files-found: error
-
-      - name: Publish ONLY experimental candidate; do not touch proven releases
+      - name: Publish only experimental to GitHub
         if: github.ref == 'refs/heads/main'
-        shell: bash
         run: |
           set -euo pipefail
           mkdir -p shortcuts/experimental
@@ -88,5 +73,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add 'shortcuts/experimental/⚡ Speed Video Smart v5.3.shortcut'
-          git commit -m 'dist: Smart v5.3 extension-preflight test candidate [skip ci]'
+          git commit -m 'dist: Smart v5.3 offscreen probe trial [skip ci]'
           git push origin HEAD:main
